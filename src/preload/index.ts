@@ -266,10 +266,14 @@ body[data-we-sidebar-glass] [data-sidebar-right-panel][data-sidebar-right-open] 
    plugin only re-tints that token inside the settings dialog — and the plugin tints
    the surfaces inside it (terminalWrap, browserBar, paneCard) with the 侧栏 sliders,
    so the bar reads as a solid sheet rather than as the composer's glass. Give the
-   dock the same treatment as the right panel: the composer's veil as its own fill,
-   and the composer's values in the sidebar variables its children consume. */
+   dock the composer's veil as its own fill, and feed the variables its children
+   consume from the composer instead of the 侧栏: same blur radius, the composer's
+   veil alpha, flat saturation, full sheen — and the glass colour, because the 侧栏
+   colour (a cyan here) mixed into every surface inside the dock is what made the
+   whole bar read as cyan rather than as plain glass. */
 body[data-we-sidebar-glass] [class*="_bottomPanel"] {
   background-color: var(--kokona-surface-glass) !important;
+  --we-sidebar-color: var(--we-glass-color, #ffffff);
   --we-sidebar-blur: var(--we-blur, 16px);
   --we-sidebar-tint: calc(var(--we-glass-alpha, 0.2) * 80%);
   --we-sidebar-saturate: var(--we-saturate, 1.8);

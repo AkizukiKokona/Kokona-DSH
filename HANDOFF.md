@@ -508,12 +508,17 @@ body { --dsw-alias-markdown-inline-code: var(--kokona-surface-chip) !important; 
 ```css
 body[data-we-sidebar-glass] [class*="_bottomPanel"] {
   background-color: var(--kokona-surface-glass) !important;
+  --we-sidebar-color: var(--we-glass-color, #ffffff);
   --we-sidebar-blur: var(--we-blur, 16px);
   --we-sidebar-tint: calc(var(--we-glass-alpha, 0.2) * 80%);
   --we-sidebar-saturate: var(--we-saturate, 1.8);
   --we-sidebar-sheen: 1;
 }
 ```
+
+**第一版只改了 `--we-sidebar-tint`（浓度），没改 `--we-sidebar-color`（颜色），所以底栏依然是青的。** 插件那四条 `background-color: color-mix(in srgb, var(--we-sidebar-color, #ffffff) <浓度>, transparent) !important` 里，浓度和颜色是分开的两个变量 —— 只调浓度只是让青色变淡，不会变白。要中性玻璃就必须把颜色也换掉。已确认 `--we-sidebar-color` 在插件里**只**出现在 `background-color`（border / box-shadow 命中数为 0），而 sheen 用的是写死的 `rgba(255,255,255,…)`，所以覆盖这一个变量就够，不用再逐个元素写 `!important`。
+
+日志验证（`diag.log`）：`_paneCard` 从 `color(srgb 0.403922 0.862745 0.905882 / 0.1236)`（= `#67DCE7` 的 12.36%）改成中性之后应变成白色的 12.36%。
 
 ### 「轨迹」页的纯白底
 
