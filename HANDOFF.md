@@ -716,3 +716,41 @@ ctx.slots.register({ name: "sidebar.brand.name" }, OfficialBrandName)   // Brand
 **未做**：没有真正启动应用看效果（会杀掉正在跑的内核），所以 72px 的实际观感、深色主题下的
 `currentColor` 效果、以及首屏文案替换的时序都还是纸面结论。
 
+### 发布记录（2026-09-26）
+
+| 项 | 值 |
+|---|---|
+| commit | `7a5821d` feat(1.0.2): rename to KokonaHarness, own brand mark, hero copy and preview pill（前面还有 `2b957c4` 忽略 `brand-work/`） |
+| tag | `v1.0.2` → `7a5821d`，已推 github + codeberg |
+| remotes | 两个远端 URL 从 `Kokona-DSH` 改成 `KokonaHarness`。仓库是**改名不是新建**：远端 `main` 历史连续，v1.0.0 / v1.0.1 都还在 |
+| Actions run | `36188450878`，三平台全绿 |
+| GitHub release | 4 个资产：exe `95306884`、mac-arm64 `112149090`、mac-x64 `117199035`、linux AppImage `117506785` 字节 |
+| Codeberg release | id `12459312`，4 个资产字节数与 GitHub **逐个相等** |
+| 资产名 | `KokonaHarness-Setup-1.0.2.exe` / `KokonaHarness-1.0.2-mac-arm64.dmg` / `-mac-x64.dmg` / `-linux-x86_64.AppImage` |
+| 更新检查 | 两个端点实测都返回 `v1.0.2`：`api.github.com/repos/AkizukiKokona/KokonaHarness/releases/latest` 与 `codeberg.org/api/v1/repos/AkizukiKokona/KokonaHarness/releases?limit=1`（应用读 `[0]`）→ 1.0.1 装机会看到 hasUpdate，1.0.2 自己不会 |
+
+**新版 PowerShell 7.6 怎么调用（重要）**：YG 用 winget 装的是 **MSIX 包**，
+`C:\Program Files\PowerShell\7\pwsh.exe` **不存在**；`WindowsApps\pwsh.exe` 只是个 0 字节别名，
+而且 **harness 的 `pwsh` 工具仍然落到 Windows PowerShell 5.1**（实测 `$PSVersionTable` = 5.1.26100）。
+真正的 7.6 在：
+
+```
+$env:LOCALAPPDATA\Microsoft\WindowsApps\Microsoft.PowerShell_8wekyb3d8bbwe\pwsh.exe
+```
+
+调用方式（外层是 5.1，所以**只用单引号，别嵌套引号**）：
+
+```powershell
+$p7 = "$env:LOCALAPPDATA\Microsoft\WindowsApps\Microsoft.PowerShell_8wekyb3d8bbwe\pwsh.exe"
+& $p7 -NoProfile -Command '$PSVersionTable.PSVersion.ToString()'   # -> 7.6.6
+& $p7 -NoProfile -File 'D:\path\to\script.ps1'                      # 复杂脚本走这条
+```
+
+**别**在 `-Command` 里嵌套双引号或单引号：外层 5.1 先解析，`"` 会被拆成多个参数、
+`'` 会提前结束字符串（本轮各踩一次）。要 7.6 的语法就把脚本写成 `.ps1` 再 `-File`。
+
+**Codeberg 上传（这次的办法，比 §6 的 curl 省事）**：7.6 的
+`Invoke-RestMethod -Form @{attachment = Get-Item $path}` 直接就是 gitea 要的 multipart 字段名，
+不用写 header 文件；`Authorization: token <token>` 走 `-Headers`。四个资产 422 MB 一次跑完，
+服务端回读的 `size` 与 GitHub 逐个相等。
+
