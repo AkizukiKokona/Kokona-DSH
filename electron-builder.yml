@@ -9,26 +9,32 @@ files:
 extraResources:
   - from: resources/icon.png
     to: icon.png
-  - from: resources/runtime-baseline
-    to: runtime-baseline
-    filter:
-      - "**/*"
 asar: true
+artifactName: KokonaDSH-${version}-${os}-${arch}.${ext}
 win:
   icon: resources/icon.png
   target:
-    - nsis
+    - target: nsis
+      arch:
+        - x64
 nsis:
   oneClick: false
   allowToChangeInstallationDirectory: true
   perMachine: false
+  artifactName: KokonaDSH-Setup-${version}.${ext}
 mac:
   icon: resources/icon.png
-  target:
-    - dmg
   category: public.app-category.developer-tools
+  identity: null
+  target:
+    - target: dmg
+      arch:
+        - x64
+        - arm64
 linux:
   icon: resources/icon.png
-  target:
-    - AppImage
   category: Development
+  target:
+    - target: AppImage
+      arch:
+        - x64
