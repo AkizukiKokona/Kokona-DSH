@@ -27,7 +27,8 @@ export const DEFAULT_CONFIG: AppConfig = {
     insetRight: 0
   },
   autoUpdateCore: false,
-  lastTheme: null
+  lastTheme: null,
+  updateSource: 'auto'
 }
 
 export const IPC = {
@@ -46,7 +47,9 @@ export const IPC = {
   setConfig: 'kokona:set-config',
   revealData: 'kokona:reveal-data',
   logs: 'kokona:logs',
-  reportTheme: 'kokona:report-theme'
+  reportTheme: 'kokona:report-theme',
+  checkShellUpdate: 'kokona:check-shell-update',
+  openExternal: 'kokona:open-external'
 } as const
 
 export type WindowAction = 'minimize' | 'maximize' | 'unmaximize' | 'toggle-maximize' | 'close'

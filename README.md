@@ -31,7 +31,9 @@ DSH 内核（@deepseek-ai/dsh）  <- 按版本装到 <userData>/runtime/<version
 - **设置头部按钮。** DSH 设置面板的内容列头部有 `settings.action` 槽（内置的"打开配置文件"按钮就在这）。KokonaDSH 往这里追加两个同级按钮，样式直接克隆现有按钮的 class：
   - **DSH 终端** —— 在 `DSH_HOME` 打开平台终端，并把当前内核的 `node_modules/.bin` 加进 `PATH`，进去即可直接用 `dsh`。
   - **重启菜单** —— 下拉：*重新加载界面*、*重启*、*重启进安全模式*。
-- **设置里的"检查更新"选项卡。** 往设置导航注入一个导航项，点它在内容区覆盖一个面板，用于对比 npm 频道、安装新内核版本、在已安装版本间切换 —— 与 `Ctrl/Cmd+Shift+K` 面板同一套操作。
+- **设置里的"检查更新"选项卡。** 往设置导航注入一个导航项，面板分两段：
+  - **内核更新**（上）：对比 npm 频道、安装新内核版本、在已安装版本间切换、重启内核。
+  - **外壳更新**（下）：检查 KokonaDSH 本身是否有新发行版。国内优先 Codeberg，国外优先 GitHub（`updateSource` 可强制）；只检查发行版，有更新时给一个"打开发行页"按钮。
 - **安全模式** 启动一个从官方 `web` 模板生成的兄弟 profile `<profile>-safe`，不加载任何插件。这就是 CLI 文档里的 `dsh --profile rescue --from-default-profile web`。
 - **插件市场。** `dshmarket`（"DSH 可视化插件市场"）作为预设插件安装。
 
@@ -103,6 +105,7 @@ npm run dist                    # electron-builder -> release/
 | `titlebar.controls` | `custom` | Win/Linux 用 `custom`；macOS 用红绿灯 |
 | `titlebar.insetRight` | `0` | 控制按钮额外的左内边距（自动避让应用控件） |
 | `lastTheme` | `null` | 最近一次见到的 DSH 主题（`dark`/`light`），决定启动页主题 |
+| `updateSource` | `auto` | 外壳更新检查源：`auto`（按语言/时区，中文优先 Codeberg）/ `codeberg` / `github` |
 
 ## 快捷键
 

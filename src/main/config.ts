@@ -21,6 +21,9 @@ function mergeConfig(raw: unknown): AppConfig {
   }
   if (typeof raw.autoUpdateCore === 'boolean') base.autoUpdateCore = raw.autoUpdateCore
   if (raw.lastTheme === 'dark' || raw.lastTheme === 'light') base.lastTheme = raw.lastTheme
+  if (raw.updateSource === 'auto' || raw.updateSource === 'github' || raw.updateSource === 'codeberg') {
+    base.updateSource = raw.updateSource
+  }
   if (isRecord(raw.titlebar)) {
     const tb = raw.titlebar
     if (typeof tb.height === 'number' && tb.height > 0) base.titlebar.height = tb.height

@@ -4,6 +4,7 @@ import type { AppConfig } from '../shared/types'
 import { loadConfig, saveConfig } from './config'
 import { userDataDir } from './paths'
 import type { Shell } from './shell'
+import { checkShellUpdate } from './shell-update'
 
 function applyWindowAction(window: BrowserWindow, action: WindowAction): void {
   switch (action) {
@@ -43,6 +44,11 @@ export function registerIpc(shell: Shell): void {
   ipcMain.handle(IPC.openTerminal, () => shell.openTerminal())
   ipcMain.handle(IPC.revealData, () => electronShell.openPath(userDataDir()))
   ipcMain.handle(IPC.logs, () => shell.logs())
+  ipcMain.handle(IPC.checkShellUpdate, () => checkShellUpdate())
+  ipcMain.handle(IPC.openExternal, (_event, url: unknown) => {
+    if (typeof url === 'string' && /^https?:\/\//.test(url)) return electronShell.openExternal(url)
+    return undefined
+  })
   ipcMain.on(IPC.reportTheme, (_event, theme: unknown) => {
     if (theme === 'dark' || theme === 'light') saveConfig({ ...loadConfig(), lastTheme: theme })
   })

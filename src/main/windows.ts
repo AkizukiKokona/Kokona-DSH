@@ -171,13 +171,30 @@ async function testSettingsActions(window: BrowserWindow): Promise<void> {
       nav.click()
       return 'nav-clicked'
     })()`)) as string
-    await new Promise((resolve) => setTimeout(resolve, 500))
+    await new Promise((resolve) => setTimeout(resolve, 600))
     const panelResult = (await window.webContents.executeJavaScript(`(() => {
       const panel = document.querySelector('[data-kokona-update-panel]')
-      const heading = panel ? panel.querySelector('h2') : null
-      return JSON.stringify({ open: Boolean(panel), heading: heading ? heading.textContent : null })
+      if (!panel) return JSON.stringify({ open: false })
+      const sections = Array.from(panel.querySelectorAll('div'))
+        .map((node) => node.textContent)
+        .filter((text) => text === '内核更新' || text === '外壳更新')
+      return JSON.stringify({ open: true, sections })
     })()`)) as string
     log.info(`settings update tab: ${navResult} -> ${panelResult}`)
+    await window.webContents.executeJavaScript(`(() => {
+      const panel = document.querySelector('[data-kokona-update-panel]')
+      if (!panel) return
+      const button = Array.from(panel.querySelectorAll('button')).find((b) => b.textContent === '检查外壳更新')
+      if (button) button.click()
+    })()`)
+    await new Promise((resolve) => setTimeout(resolve, 4500))
+    const shellStatus = (await window.webContents.executeJavaScript(`(() => {
+      const panel = document.querySelector('[data-kokona-update-panel]')
+      if (!panel) return null
+      const paragraphs = Array.from(panel.querySelectorAll('p'))
+      return paragraphs.length ? paragraphs[paragraphs.length - 1].textContent : null
+    })()`)) as string | null
+    log.info(`settings shell update status: ${shellStatus}`)
   } catch (error) {
     log.warn(`settings test failed: ${(error as Error).message}`)
   }

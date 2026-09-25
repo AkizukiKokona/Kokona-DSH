@@ -1,7 +1,7 @@
 import { contextBridge, ipcRenderer, type IpcRendererEvent } from 'electron'
 import { IPC } from '../shared/constants'
 import type { KokonaApi, UpdateInfo } from '../shared/api'
-import type { AppConfig, RuntimeSnapshot, WindowState } from '../shared/types'
+import type { AppConfig, RuntimeSnapshot, ShellUpdateInfo, WindowState } from '../shared/types'
 
 const api: KokonaApi = {
   snapshot: () => ipcRenderer.invoke(IPC.snapshot) as Promise<RuntimeSnapshot>,
@@ -17,6 +17,8 @@ const api: KokonaApi = {
   revealData: () => ipcRenderer.invoke(IPC.revealData) as Promise<string>,
   getLogs: () => ipcRenderer.invoke(IPC.logs) as Promise<string[]>,
   reportTheme: (theme) => ipcRenderer.send(IPC.reportTheme, theme),
+  checkShellUpdate: () => ipcRenderer.invoke(IPC.checkShellUpdate) as Promise<ShellUpdateInfo>,
+  openExternal: (url) => ipcRenderer.invoke(IPC.openExternal, url) as Promise<void>,
   window: {
     minimize: () => ipcRenderer.send(IPC.windowControl, 'minimize'),
     maximize: () => ipcRenderer.send(IPC.windowControl, 'maximize'),
@@ -397,6 +399,27 @@ function actionButton(label: string): HTMLButtonElement {
   return button
 }
 
+function row(): HTMLElement {
+  const node = document.createElement('div')
+  node.style.cssText = 'display:flex;gap:8px;flex-wrap:wrap;'
+  return node
+}
+
+function statusLine(): HTMLElement {
+  const node = document.createElement('p')
+  node.style.cssText =
+    'font-size:12px;min-height:18px;margin:8px 0 0;color:var(--dsw-alias-label-secondary,#9a9aa8);white-space:pre-wrap;'
+  return node
+}
+
+function sectionTitle(text: string): HTMLElement {
+  const node = document.createElement('div')
+  node.textContent = text
+  node.style.cssText =
+    'font-size:13px;font-weight:600;margin:20px 0 8px;padding-top:16px;border-top:1px solid var(--dsw-alias-border-l2,rgba(128,128,128,.25));'
+  return node
+}
+
 function buildUpdatePanel(): HTMLElement {
   const wrap = document.createElement('div')
   wrap.setAttribute(UPDATE_PANEL_ATTR, 'true')
@@ -406,25 +429,38 @@ function buildUpdatePanel(): HTMLElement {
   heading.textContent = '检查更新'
   heading.style.cssText = 'font-size:16px;font-weight:600;margin:0 0 4px;'
   const sub = document.createElement('p')
-  sub.textContent = '检查并升级 DSH 内核。应用与内核分开更新，可随时切换版本。'
-  sub.style.cssText = 'margin:0 0 14px;color:var(--dsw-alias-label-secondary,#9a9aa8);font-size:12px;'
-  const row = document.createElement('div')
-  row.style.cssText = 'display:flex;gap:8px;flex-wrap:wrap;'
-  const checkButton = actionButton('检查更新')
-  const restartButton = actionButton('重启内核')
-  row.append(checkButton, restartButton)
-  const status = document.createElement('p')
-  status.style.cssText = 'font-size:12px;min-height:18px;margin:8px 0 0;color:var(--dsw-alias-label-secondary,#9a9aa8);'
+  sub.textContent = '内核与外壳分开更新，可分别检查。'
+  sub.style.cssText = 'margin:0 0 4px;color:var(--dsw-alias-label-secondary,#9a9aa8);font-size:12px;'
+  wrap.append(heading, sub)
+
+  const coreTitle = document.createElement('div')
+  coreTitle.textContent = '内核更新'
+  coreTitle.style.cssText = 'font-size:13px;font-weight:600;margin:16px 0 8px;'
+  const coreRow = row()
+  const coreCheck = actionButton('检查内核更新')
+  const coreRestart = actionButton('重启内核')
+  coreRow.append(coreCheck, coreRestart)
+  const coreStatus = statusLine()
   const listTitle = document.createElement('div')
   listTitle.textContent = '已安装版本'
-  listTitle.style.cssText = 'font-size:12px;color:var(--dsw-alias-label-secondary,#9a9aa8);margin:16px 0 6px;'
+  listTitle.style.cssText = 'font-size:12px;color:var(--dsw-alias-label-secondary,#9a9aa8);margin:14px 0 6px;'
   const list = document.createElement('div')
   list.style.cssText = 'display:flex;flex-direction:column;gap:6px;'
-  wrap.append(heading, sub, row, status, listTitle, list)
+  wrap.append(coreTitle, coreRow, coreStatus, listTitle, list)
 
-  const refresh = async (): Promise<void> => {
+  const shellTitle = sectionTitle('外壳更新')
+  const shellRow = row()
+  const shellCheck = actionButton('检查外壳更新')
+  shellRow.append(shellCheck)
+  const shellStatus = statusLine()
+  const notes = document.createElement('pre')
+  notes.style.cssText =
+    'display:none;margin:12px 0 0;max-height:220px;overflow:auto;background:#0b0b10;border:1px solid var(--dsw-alias-border-l2,rgba(128,128,128,.3));border-radius:8px;padding:10px;font-size:11px;line-height:1.5;white-space:pre-wrap;word-break:break-word;'
+  wrap.append(shellTitle, shellRow, shellStatus, notes)
+
+  const refreshCore = async (): Promise<void> => {
     const snapshot = await api.snapshot()
-    status.textContent = `当前内核 ${snapshot.coreVersion ?? '无'} · 频道 ${snapshot.channel}`
+    coreStatus.textContent = `当前内核 ${snapshot.coreVersion ?? '无'} · 频道 ${snapshot.channel}`
     list.replaceChildren()
     const versions = [...snapshot.installedVersions]
     if (snapshot.coreVersion && !versions.includes(snapshot.coreVersion)) versions.push(snapshot.coreVersion)
@@ -446,43 +482,90 @@ function buildUpdatePanel(): HTMLElement {
     }
   }
 
-  checkButton.addEventListener('click', async () => {
-    checkButton.disabled = true
-    status.textContent = '检查中…'
+  coreCheck.addEventListener('click', async () => {
+    coreCheck.disabled = true
+    coreStatus.textContent = '检查中…'
     try {
       const info = await api.checkUpdates()
       if (!info.latest) {
-        status.textContent = '该频道没有可用版本。'
+        coreStatus.textContent = '该频道没有可用版本。'
       } else if (info.latest === info.current) {
-        status.textContent = `已是最新：${info.latest}`
+        coreStatus.textContent = `已是最新：${info.latest}`
       } else {
-        status.textContent = `发现新版本 ${info.latest}（当前 ${info.current ?? '无'}）`
+        coreStatus.textContent = `发现新版本 ${info.latest}（当前 ${info.current ?? '无'}）`
         const install = actionButton(`安装 ${info.latest}`)
         install.addEventListener('click', async () => {
           install.disabled = true
           install.textContent = '安装中…'
           try {
             await api.installCore(info.latest as string)
-            status.textContent = `已安装 ${info.latest}`
-            await refresh()
+            coreStatus.textContent = `已安装 ${info.latest}`
+            await refreshCore()
           } catch (error) {
-            status.textContent = `安装失败：${(error as Error).message}`
+            coreStatus.textContent = `安装失败：${(error as Error).message}`
             install.disabled = false
             install.textContent = `安装 ${info.latest}`
           }
         })
-        row.append(install)
+        coreRow.append(install)
       }
     } catch (error) {
-      status.textContent = `检查失败：${(error as Error).message}`
+      coreStatus.textContent = `检查失败：${(error as Error).message}`
     } finally {
-      checkButton.disabled = false
+      coreCheck.disabled = false
     }
   })
-  restartButton.addEventListener('click', () => void api.restartCore())
+  coreRestart.addEventListener('click', () => void api.restartCore())
 
-  void refresh()
+  let openButton: HTMLButtonElement | null = null
+  const setOpenButton = (url: string | null): void => {
+    openButton?.remove()
+    openButton = null
+    if (!url) return
+    openButton = actionButton('打开发行页')
+    openButton.addEventListener('click', () => void api.openExternal(url))
+    shellRow.append(openButton)
+  }
+
+  void api.snapshot().then((snapshot) => {
+    shellStatus.textContent = `当前版本 ${snapshot.shellVersion}`
+  })
+
+  shellCheck.addEventListener('click', async () => {
+    shellCheck.disabled = true
+    shellStatus.textContent = '检查中…'
+    notes.style.display = 'none'
+    try {
+      const info = await api.checkShellUpdate()
+      if (info.latest && info.hasUpdate) {
+        shellStatus.textContent = `发现新版本 ${info.latest}（当前 ${info.current}）· 来源 ${info.source}`
+        setOpenButton(info.url)
+        if (info.notes) {
+          notes.textContent = info.notes
+          notes.style.display = 'block'
+        }
+      } else if (info.latest) {
+        shellStatus.textContent = `已是最新（${info.current}）· 来源 ${info.source}`
+        setOpenButton(null)
+      } else {
+        shellStatus.textContent = `暂无发行版${info.error ? `（${info.error}）` : ''}`
+        setOpenButton(null)
+      }
+    } catch (error) {
+      shellStatus.textContent = `检查失败：${(error as Error).message}`
+      setOpenButton(null)
+    } finally {
+      shellCheck.disabled = false
+    }
+  })
+
+  void refreshCore()
   return wrap
+}
+
+function closeUpdateTab(): void {
+  updatePanel?.remove()
+  updatePanel = null
 }
 
 function openUpdateTab(): void {
@@ -497,12 +580,7 @@ function openUpdateTab(): void {
   options.appendChild(updatePanel)
 }
 
-function closeUpdateTab(): void {
-  updatePanel?.remove()
-  updatePanel = null
-}
-
-function injectUpdateTab(): void {
+function injectSettingsTabs(): void {
   const root = settingsRoot()
   if (!root) return
   const navList = root.querySelector('[class*="_navList"]')
@@ -512,8 +590,9 @@ function injectUpdateTab(): void {
     navList.addEventListener(
       'click',
       (event) => {
-        const cell = navList.querySelector(`[${UPDATE_NAV_ATTR}]`)
-        if (cell && !cell.contains(event.target as Node)) closeUpdateTab()
+        const target = event.target
+        const ours = target instanceof Element && Boolean(target.closest(`[${UPDATE_NAV_ATTR}]`))
+        if (!ours) closeUpdateTab()
       },
       true
     )
@@ -528,8 +607,8 @@ function injectUpdateTab(): void {
     .filter((name) => !/active/i.test(name))
     .join(' ')
   cell.removeAttribute('aria-current')
-  const label = cell.querySelector('[class*="_navLabel"]')
-  if (label) label.textContent = '检查更新'
+  const labelNode = cell.querySelector('[class*="_navLabel"]')
+  if (labelNode) labelNode.textContent = '检查更新'
   else cell.textContent = '检查更新'
   cell.addEventListener('click', (event) => {
     event.preventDefault()
@@ -546,11 +625,11 @@ function observeSettings(): void {
     scheduled = window.setTimeout(() => {
       scheduled = 0
       injectSettingsActions()
-      injectUpdateTab()
+      injectSettingsTabs()
     }, 250)
   }
   injectSettingsActions()
-  injectUpdateTab()
+  injectSettingsTabs()
   new MutationObserver(run).observe(document.body, { childList: true, subtree: true })
 }
 

@@ -1,4 +1,4 @@
-import type { AppConfig, RuntimeSnapshot, WindowState } from './types'
+import type { AppConfig, RuntimeSnapshot, ShellUpdateInfo, WindowState } from './types'
 
 export interface UpdateInfo {
   current: string | null
@@ -20,6 +20,8 @@ export interface KokonaApi {
   revealData(): Promise<string>
   getLogs(): Promise<string[]>
   reportTheme(theme: 'dark' | 'light'): void
+  checkShellUpdate(): Promise<ShellUpdateInfo>
+  openExternal(url: string): Promise<void>
   window: {
     minimize(): void
     maximize(): void

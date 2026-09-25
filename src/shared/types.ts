@@ -1,5 +1,17 @@
 export type Channel = 'stable' | 'beta'
 
+export type UpdateSource = 'auto' | 'github' | 'codeberg'
+
+export interface ShellUpdateInfo {
+  current: string
+  latest: string | null
+  hasUpdate: boolean
+  url: string | null
+  source: 'github' | 'codeberg' | null
+  notes: string | null
+  error: string | null
+}
+
 export type BootPhase =
   | 'idle'
   | 'resolving-runtime'
@@ -27,6 +39,7 @@ export interface AppConfig {
   titlebar: TitlebarConfig
   autoUpdateCore: boolean
   lastTheme: 'dark' | 'light' | null
+  updateSource: UpdateSource
 }
 
 export interface RuntimeSnapshot {

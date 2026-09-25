@@ -39,9 +39,12 @@ Injected into the DSH web page (never by patching the core):
     `node_modules/.bin` on `PATH`, so `dsh` is runnable immediately.
   - **重启菜单** — a dropdown: *重新加载界面* (`webContents.reload`), *重启* (stop + boot the core),
     *重启进安全模式*.
-- **Settings "检查更新" tab.** A nav cell is injected into the settings nav; clicking it overlays a
-  panel on the section column that checks the channel against npm, installs a new core version, and
-  switches between installed versions — the same operations as the `Ctrl/Cmd+Shift+K` panel.
+- **Settings "检查更新" tab.** A nav cell is injected into the settings nav; the panel has two sections:
+  - **内核更新 (core)** — check the channel against npm, install a new core version, switch between
+    installed versions, restart the core.
+  - **外壳更新 (shell)** — check whether KokonaDSH itself has a new release. Codeberg first for China,
+    GitHub first elsewhere (`updateSource` forces one). Releases only; when an update exists it offers
+    an "open release page" button.
 - **Safe mode** boots a sibling profile `<profile>-safe` created from the shipped `web` template,
   so no plugins load. It is the same mechanism the CLI documents as
   `dsh --profile rescue --from-default-profile web`.
@@ -142,6 +145,7 @@ Quitting from the tray stops the core and exits. `window-all-closed` never quits
 | `titlebar.controls` | `custom` | `custom` on Win/Linux; macOS uses traffic lights |
 | `titlebar.insetRight` | `0` | extra left-padding for the controls (auto-avoids app controls) |
 | `lastTheme` | `null` | last DSH theme seen (`dark`/`light`); drives the splash theme |
+| `updateSource` | `auto` | shell update source: `auto` (locale/timezone, Chinese -> Codeberg) / `codeberg` / `github` |
 
 ## Shortcuts
 
