@@ -671,6 +671,7 @@ async function bootstrap(): Promise<void> {
     }
     observeSettings()
     syncRightPanel()
+    new MutationObserver(syncRightPanel).observe(document.documentElement, { childList: true, subtree: true })
     window.setInterval(syncRightPanel, 600)
   }
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', start, { once: true })
