@@ -8,3 +8,6 @@ resources/runtime-baseline/
 .DS_Store
 .env
 .env.local
+
+# local auth helpers, not part of the app
+scripts/*-login.*
