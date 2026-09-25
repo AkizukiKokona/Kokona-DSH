@@ -1,0 +1,34 @@
+appId: com.kokona.dsh
+productName: Kokona DSH
+directories:
+  output: release
+  buildResources: resources
+files:
+  - out/**/*
+  - package.json
+extraResources:
+  - from: resources/icon.png
+    to: icon.png
+  - from: resources/runtime-baseline
+    to: runtime-baseline
+    filter:
+      - "**/*"
+asar: true
+win:
+  icon: resources/icon.png
+  target:
+    - nsis
+nsis:
+  oneClick: false
+  allowToChangeInstallationDirectory: true
+  perMachine: false
+mac:
+  icon: resources/icon.png
+  target:
+    - dmg
+  category: public.app-category.developer-tools
+linux:
+  icon: resources/icon.png
+  target:
+    - AppImage
+  category: Development

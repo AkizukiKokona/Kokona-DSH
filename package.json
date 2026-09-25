@@ -1,0 +1,26 @@
+{
+  "name": "kokonadsh",
+  "version": "0.1.0",
+  "description": "KokonaDSH - a DeepSeek Harness desktop shell with an independently updatable core and a custom dark titlebar.",
+  "main": "./out/main/index.js",
+  "author": "YG",
+  "license": "MIT",
+  "private": true,
+  "scripts": {
+    "dev": "electron-vite dev",
+    "build": "electron-vite build",
+    "start": "electron-vite preview",
+    "typecheck": "tsc --noEmit -p tsconfig.node.json && tsc --noEmit -p tsconfig.preload.json && tsc --noEmit -p tsconfig.web.json",
+    "pack": "npm run build && electron-builder --dir",
+    "dist": "npm run build && electron-builder",
+    "prepare:baseline": "node scripts/prepare-baseline.mjs"
+  },
+  "devDependencies": {
+    "@types/node": "^22.15.0",
+    "electron": "^38.2.0",
+    "electron-builder": "^26.0.12",
+    "electron-vite": "^4.0.0",
+    "typescript": "^5.9.0",
+    "vite": "^7.1.0"
+  }
+}
