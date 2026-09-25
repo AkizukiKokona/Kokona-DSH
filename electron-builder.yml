@@ -1,5 +1,5 @@
 appId: com.kokona.dsh
-productName: Kokona DSH
+productName: KokonaHarness
 directories:
   output: release
   buildResources: resources
@@ -9,8 +9,10 @@ files:
 extraResources:
   - from: resources/icon.png
     to: icon.png
+  - from: resources/brand.svg
+    to: brand.svg
 asar: true
-artifactName: KokonaDSH-${version}-${os}-${arch}.${ext}
+artifactName: KokonaHarness-${version}-${os}-${arch}.${ext}
 win:
   icon: resources/icon.png
   target:
@@ -21,7 +23,7 @@ nsis:
   oneClick: false
   allowToChangeInstallationDirectory: true
   perMachine: false
-  artifactName: KokonaDSH-Setup-${version}.${ext}
+  artifactName: KokonaHarness-Setup-${version}.${ext}
 mac:
   icon: resources/icon.png
   category: public.app-category.developer-tools

@@ -1,4 +1,11 @@
-# KokonaDSH
+# KokonaHarness
+
+> **Renamed to KokonaHarness in 1.0.2.** The repositories moved to
+> [GitHub](https://github.com/AkizukiKokona/KokonaHarness) and
+> [Codeberg](https://codeberg.org/AkizukiKokona/KokonaHarness), and the shell's built-in updater now
+> points at them. The old repositories and their releases are abandoned, with no migration. The data
+> directory is still `%APPDATA%\KokonaDSH` — deliberately pinned (`app.setPath('userData', ...)`), so
+> upgrading does not re-download a core you already have.
 
 A DeepSeek Harness (`dsh`) desktop shell. Electron + a web-rendered core, with two things the
 existing half-finished desktops don't give you:
@@ -13,7 +20,7 @@ existing half-finished desktops don't give you:
 ## Architecture
 
 ```
-KokonaDSH (Electron shell)
+KokonaHarness (Electron shell)
   main/            app lifecycle, windows, IPC
     runtime/       core version manager (baseline + registry channels)
     core/          profile bootstrap + dsh process spawn + readiness probe
@@ -34,7 +41,7 @@ Injected into the DSH web page (never by patching the core):
 
 - **Settings header actions.** DSH's settings panel renders the `settings.action` slot in its
   content-column header (the seat that holds the built-in "open configuration file" button).
-  KokonaDSH appends two sibling buttons there, styled by cloning the existing button's classes:
+  KokonaHarness appends two sibling buttons there, styled by cloning the existing button's classes:
   - **DSH 终端** — opens the platform terminal at `DSH_HOME` with the active core's
     `node_modules/.bin` on `PATH`, so `dsh` is runnable immediately.
   - **重启菜单** — a dropdown: *重新加载界面* (`webContents.reload`), *重启* (stop + boot the core),
@@ -42,7 +49,7 @@ Injected into the DSH web page (never by patching the core):
 - **Settings "检查更新" tab.** A nav cell is injected into the settings nav; the panel has two sections:
   - **内核更新 (core)** — check the channel against npm, install a new core version, switch between
     installed versions, restart the core.
-  - **外壳更新 (shell)** — check whether KokonaDSH itself has a new release. Codeberg first for China,
+  - **外壳更新 (shell)** — check whether KokonaHarness itself has a new release. Codeberg first for China,
     GitHub first elsewhere (`updateSource` forces one). Releases only; when an update exists it offers
     an "open release page" button.
 - **Safe mode** boots a sibling profile `<profile>-safe` created from the shipped `web` template,
@@ -53,10 +60,10 @@ Injected into the DSH web page (never by patching the core):
   `[data-sidebar-right-panel]` mounted and visible after the right column collapses
   (`position:absolute`, anchored right against a 0-width `_rightbarCol`, `pointer-events:none`).
   Wallpaper-style plugins paint sidebar glass on it without checking the open state, leaving a
-  translucent blur over the right half. KokonaDSH sets `display:none` on that panel while
+  translucent blur over the right half. KokonaHarness sets `display:none` on that panel while
   `_rightbarCol` has zero width, and restores it when expanded.
 
-The window title is forced to `Kokona DSH` (`page-title-updated` is prevented), so the DSH page's own
+The window title is forced to `KokonaHarness` (`page-title-updated` is prevented), so the DSH page's own
 document title never renames the window.
 
 The settings anchors are structural, not hash-based: the actions container is the element whose class

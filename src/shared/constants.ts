@@ -1,7 +1,7 @@
 import type { AppConfig, Channel } from './types'
 
-export const APP_NAME = 'KokonaDSH'
-export const DISPLAY_NAME = 'Kokona DSH'
+export const APP_NAME = 'KokonaHarness'
+export const DISPLAY_NAME = 'KokonaHarness'
 export const DSH_PACKAGE = '@deepseek-ai/dsh'
 export const NPM_REGISTRY = 'https://registry.npmjs.org'
 export const DEFAULT_PROFILE = 'kokona'
@@ -29,7 +29,8 @@ export const DEFAULT_CONFIG: AppConfig = {
   autoUpdateCore: false,
   safeMode: false,
   lastTheme: null,
-  updateSource: 'auto'
+  updateSource: 'auto',
+  fixWorkspaceAcl: true
 }
 
 export const IPC = {

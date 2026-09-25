@@ -1,7 +1,7 @@
 {
-  "name": "kokonadsh",
-  "version": "1.0.1",
-  "description": "KokonaDSH - a DeepSeek Harness desktop shell with an independently updatable core and a custom dark titlebar.",
+  "name": "kokonaharness",
+  "version": "1.0.2",
+  "description": "KokonaHarness - a DeepSeek Harness desktop shell with an independently updatable core and a custom dark titlebar.",
   "main": "./out/main/index.js",
   "author": "YG",
   "license": "MIT",

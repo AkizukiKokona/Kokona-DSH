@@ -1,6 +1,7 @@
+import { existsSync, readFileSync } from 'node:fs'
+import { join } from 'node:path'
 import { contextBridge, ipcRenderer, type IpcRendererEvent } from 'electron'
 import { IPC } from '../shared/constants'
-import { diagLine, installDiagnostics } from './diagnostics'
 import type { KokonaApi, UpdateInfo } from '../shared/api'
 import type { AppConfig, RuntimeSnapshot, ShellUpdateInfo, WindowState } from '../shared/types'
 
@@ -295,6 +296,50 @@ body[data-we-sidebar-glass] [class*="_bottomPanel"] {
 [data-trajectory-scroll] {
   background-color: transparent !important;
 }
+/* The hero's 预览版 pill is a flat --dsw-alias-state-business-tertiary with no glass
+   at all. YG wants a faint blue frosted pill instead. Only the surface changes:
+   the pill's own border-radius, padding, align-self and margins stay untouched, so
+   it keeps sitting at the top-right of the headline exactly where it was. */
+[class*="_previewBadge"] {
+  background: color-mix(in srgb, var(--dsw-alias-state-business-primary, #4d6bfe) 14%, transparent) !important;
+  border-color: color-mix(in srgb, var(--dsw-alias-state-business-primary, #4d6bfe) 34%, transparent) !important;
+  backdrop-filter: blur(10px) saturate(1.6) brightness(1.03) !important;
+  -webkit-backdrop-filter: blur(10px) saturate(1.6) brightness(1.03) !important;
+}
+/* The sidebar brand slot. The official whale and wordmark are inline SVGs with no
+   src, so the replacement is injected as an inline SVG element by installBrand():
+   a data: URL would be subject to the page's CSP, and an external image cannot
+   inherit currentColor. Under a Windows titlebar the row is 40px tall with
+   overflow hidden, so it has to open up: the lockup renders 72px tall, which is
+   3x the official 24px brand row and the ceiling YG allowed. Everything is
+   forced left-aligned inside the row. */
+[class*="_logoRow"] {
+  height: auto !important;
+  min-height: 76px !important;
+  overflow: visible !important;
+  align-items: center !important;
+}
+[class*="_logoRow"] [class*="_brand"] {
+  justify-content: flex-start !important;
+  overflow: visible !important;
+}
+[class*="_logoRow"] [class*="_brandIdentity"] {
+  height: auto !important;
+  justify-content: flex-start !important;
+  overflow: visible !important;
+}
+/* Hidden only while the replacement is mounted, so a failed asset read degrades to
+   the stock brand instead of leaving an empty row. */
+body[data-kokona-brand] [class*="_logoRow"] [class*="_brandIdentity"] > * {
+  display: none !important;
+}
+body[data-kokona-brand] [class*="_logoRow"] svg[data-kokona-brand-mark] {
+  display: block !important;
+  height: 72px !important;
+  width: auto !important;
+  max-width: 100% !important;
+  flex: none;
+}
 `
   document.head.appendChild(style)
 }
@@ -375,7 +420,6 @@ function applyShift(element: HTMLElement, shift: number): void {
   }
   if (state.applied === shift) return
   state.applied = shift
-  diagLine(`shift ${element.getAttribute('class') ?? element.tagName} -> ${shift}px`)
   // '' hands the property back to the shell's own rule; the conversation header
   // corner ships margin-right:-16px, which a flat override used to clobber.
   element.style.marginRight = shift === 0 ? '' : `${state.original + shift}px`
@@ -481,11 +525,6 @@ function installTitlebar(config: AppConfig): void {
           // First sighting of this value. A one-off snapshot — a slot re-mounting,
           // a frame of an animation this pass cannot see — would otherwise move
           // the buttons and move them straight back. Require the same answer twice.
-          diagLine(
-            `layout pending ${wanted}px (was ${applied}px) on ` +
-              `${entry.element.getAttribute('class') ?? entry.element.tagName} ` +
-              `rect=${Math.round(entry.rect.left)},${Math.round(entry.rect.right)} boundary=${Math.round(boundary)}`
-          )
           pendingShift.set(entry.element, wanted)
           needConfirm = true
         }
@@ -1064,6 +1103,73 @@ function syncRightPanel(): void {
   else if (!collapsed && hidden) panel.style.removeProperty('display')
 }
 
+const BRAND_ATTR = 'data-kokona-brand'
+const BRAND_MARK_ATTR = 'data-kokona-brand-mark'
+const HERO_HEADLINE = '沐浴晨光，方得救赎！'
+const HERO_SOURCE = ['探索未至之境', 'Into the Unknown']
+
+let brandSourceCache: string | null | undefined
+
+function brandSource(): string | null {
+  if (brandSourceCache !== undefined) return brandSourceCache
+  const candidates = [
+    process.resourcesPath ? join(process.resourcesPath, 'brand.svg') : '',
+    join(process.cwd(), 'resources', 'brand.svg')
+  ]
+  brandSourceCache = null
+  for (const candidate of candidates) {
+    if (!candidate) continue
+    try {
+      if (existsSync(candidate)) {
+        brandSourceCache = readFileSync(candidate, 'utf8')
+        break
+      }
+    } catch {
+      // keep looking: a missing asset must never break the page
+    }
+  }
+  return brandSourceCache
+}
+
+/**
+ * Replace the sidebar's official whale and wordmark with the project lockup.
+ * Injected as a real SVG element rather than a CSS background: the artwork is
+ * hard-coded black, and remapping it to currentColor is the only way it follows
+ * the sidebar's ink instead of vanishing in the dark theme — an external image
+ * cannot inherit currentColor, and a data: URL would answer to the page CSP.
+ */
+function installBrand(): void {
+  const identity = document.querySelector('[class*="_logoRow"] [class*="_brandIdentity"]')
+  if (!(identity instanceof HTMLElement)) return
+  if (identity.querySelector(`svg[${BRAND_MARK_ATTR}]`)) return
+  const source = brandSource()
+  if (!source) return
+  const holder = document.createElement('div')
+  holder.innerHTML = source
+  const svg = holder.querySelector('svg')
+  if (!svg) return
+  svg.setAttribute(BRAND_MARK_ATTR, '')
+  svg.setAttribute('preserveAspectRatio', 'xMinYMid meet')
+  svg.removeAttribute('width')
+  svg.removeAttribute('height')
+  for (const node of Array.from(svg.querySelectorAll('[fill="#000"], [fill="#000000"]'))) {
+    node.setAttribute('fill', 'currentColor')
+  }
+  identity.appendChild(svg)
+  document.body.setAttribute(BRAND_ATTR, '')
+}
+
+/** The hero headline is a locale string (hero.headline); swap the copy in place. */
+function installHeroCopy(): void {
+  const group = document.querySelector('[class*="_titleGroup"]')
+  if (!(group instanceof HTMLElement)) return
+  const headline = group.firstElementChild
+  if (!(headline instanceof HTMLElement)) return
+  const current = (headline.textContent ?? '').trim()
+  if (!HERO_SOURCE.includes(current)) return
+  headline.textContent = HERO_HEADLINE
+}
+
 async function bootstrap(): Promise<void> {
   if (!isDshPage()) return
   const start = () => {
@@ -1073,10 +1179,17 @@ async function bootstrap(): Promise<void> {
       })
     }
     observeSettings()
-    syncRightPanel()
-    new MutationObserver(syncRightPanel).observe(document.documentElement, { childList: true, subtree: true })
-    window.setInterval(syncRightPanel, 600)
-    installDiagnostics()
+    // One tick for the three things that must survive React re-renders: the right
+    // panel sweep, the brand lockup and the hero copy. Each is guarded by its own
+    // cheap check, so a tick after the work is done is a couple of reads.
+    const tick = (): void => {
+      syncRightPanel()
+      installBrand()
+      installHeroCopy()
+    }
+    tick()
+    new MutationObserver(tick).observe(document.documentElement, { childList: true, subtree: true })
+    window.setInterval(tick, 600)
   }
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', start, { once: true })
   else start()

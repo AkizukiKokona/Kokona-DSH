@@ -101,7 +101,7 @@ function alreadyDisabled(text: string, id: string): boolean {
  */
 export function disablePlugin(profilePath: string, id: string): boolean {
   const file = patchFile(profilePath)
-  let text = existsSync(file) ? readFileSync(file, 'utf8') : '# KokonaDSH recovery layer\n'
+  let text = existsSync(file) ? readFileSync(file, 'utf8') : '# KokonaHarness recovery layer\n'
   if (alreadyDisabled(text, id)) {
     log.info(`plugin "${id}" is already disabled`)
     return false

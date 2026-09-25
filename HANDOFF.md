@@ -564,3 +564,155 @@ shell 没有 DOM 检查器，页面也看不见，所以加了 `src/preload/diag
 - **采样日志的 key 必须带元素身份**。用选择器当 key，遇到 `querySelectorAll` 匹配多个节点（`_list`、`_root`）时后一个会覆盖前一个，日志读起来就像「同一个元素在抖」。第一版诊断就是这么把我自己带偏的，改成 `WeakMap` 分配 id 之后才对。
 - `pwsh` 里 `Select-String -Path (Join-Path ...)` 遍历 `@deepseek-ai` 下所有包会因为很多包没有 `lib/client.js` 而刷满错误 —— 先 `Test-Path` 或直接列目录。
 
+## 17. workspace-write 的硬伤：工作区缺 WRITE_OWNER（已修）
+
+### 现象
+
+权限只给「仅工作区修改」时，仍然写不了工作区文件。同一台机器上有的工作区正常、有的必挂。
+
+### 根因
+
+Windows 上 workspace-write 走 `dsh-sandbox-windows-acl`（`dsh-sandbox-local` 里 `win32: ["windows-acl"]`）。它要在**同一次 `SetNamedSecurityInfoW`** 里给工作区根写三样东西：能力 SID 的 grant、Everyone 的 `FILE_DELETE_CHILD` deny、Low 完整性标签。
+
+标签在 SACL 里，所以这次调用需要 **WRITE_OWNER**。而 `Modify` 不含 WRITE_OWNER，所有者的隐式权限也只有 `READ_CONTROL` + `WRITE_DAC`（够改 DACL，不够写 SACL）。
+
+`D:\` 的默认 ACL 是 `Authenticated Users:(OI)(CI)(IO)(M)` —— 只有 Modify，于是 D 盘上**所有**工作区都授权失败。这个失败是**故意 fail loud** 的：runner 打印 `windows-acl-run: <detail>` 并 exit 127，seam 判成「沙箱坏了」而不是「被拒绝」，**子进程根本没被拉起**。表现就是「改不了工作区文件」。
+
+包内 README 第 122 行把这条写死了：*A directory whose DACL grants only Modify now fails the grant loudly*。
+
+### 实测（2026-09-26，只读）
+
+```
+account: KOKONA\Akizuki
+OK  (skip)   C:\Users\Akizuki                  ← 有 (F)
+OK  (skip)   C:\Users\Akizuki\HaituAria        ← 继承 (F)
+NEEDS GRANT  D:\kokonadsh   D:\KokonaPolaris   D:\Kokona2D
+NEEDS GRANT  D:\KokonaPolaris\desktop\html   D:\Downloads   D:\kokonaaira
+```
+
+**C 盘的都正常、D 盘的全部中招** —— 「有时行有时不行」的全部来源就是工作区在哪个盘。
+
+旁证：`icacls D:\kokonadsh` 里没有任何能力 SID 的 ACE、没有 Low 标签。按设计这两样是永久 standing、从不撤销的（README 第 90 行：授权**每机器每工作区只落地一次**，之后所有会话、所有重启都走 skip）。所以这个工作区上从来没成功授权过一次。
+
+### 修法：只补 WRITE_OWNER，不补 Full control
+
+`icacls` 支持具体权限位，`WO - write owner`：
+
+```
+icacls "<workspace>" /grant "*<SID>:(OI)(CI)(WO)" /Q /C
+```
+
+- 只给 `WRITE_OWNER`，可继承；
+- **不给账号任何它本来没有的权限**（他本来就拥有这些目录），也不为其他主体放宽；
+- 这正是沙箱拿到权限后自己会做的那次编辑；
+- DACL 里已经有了就**跳过**，不每次启动重写（重写会触发整棵树继承传播，很慢）。
+
+临时目录实测（已清理）：`before` 无显式 ACE → `after` 多出 `KOKONA\Akizuki:(OI)(CI)(WO)`，exit 0。
+
+### 代码
+
+- 新文件 `src/main/workspace-acl.ts`：读 `<dshHome>/storages/workspace.json` 取工作区真实路径（**别用会话目录名解码** —— `--D-KokonaPolaris-desktop-html--` 里的 `-` 分不清是分隔符还是字面量），逐个 `icacls` 查是否已有 `(F)`/`(WO)`，没有就补 `(WO)`。
+- 时机：`Shell.bootOnce()` 里 fire-and-forget 调用，**不 await、不影响启动**；再 `fs.watch` 那个 registry（防抖 1.5s），于是新工作区在被第一次跑命令之前就补上了（registry 在「打开工作区」时就写，早于任何会话执行命令）。
+- 开关：`config.json` 的 `fixWorkspaceAcl`（默认 `true`）。`AppConfig` / `DEFAULT_CONFIG` / `mergeConfig` 三处都加了。
+- 日志走 `logLine`，core panel 的日志里会出现 `workspace acl: granted WRITE_OWNER on <path>`。
+
+**注意**：默认开启，所以下次启动 KokonaDSH 时它会自动给上表那 6 个 D 盘工作区补 `(WO)`（一次性，之后跳过）。不想让它动就设 `fixWorkspaceAcl: false`。
+
+### 验证到什么程度
+
+- `npm run typecheck` 通过；`npm run build` 产出 `out/main`（77.81 kB）、`out/preload`、`out/renderer`，新逻辑确认在 `out/main/index.js` 里。
+- 解析与判定逻辑用**真实 icacls 输出**跑过（上表），授权命令在临时目录上跑过。
+- **没做**：没对真实 D 盘工作区执行授权（YG 说他现在用完全权限、懒得改）。所以「启动后自动补」是设计正确 + 逻辑已验证，但没在真实工作区上跑过。
+
+### 同一症状的其他已知边界
+
+1. 受限进程里 Node 的 `child_process.spawn/exec` 用默认 `stdio: 'pipe'` 会 EPERM（连匿名管道都开不了）—— `npm run build` / vite / electron-builder 这类全中招，沙箱层面无解，只能提权。
+2. 被 AppContainer 打上包 SID（`S-1-15-2-…`）ACE 的目录对这个后端不可读。
+3. 授权会在子目录留下 `FILE_DELETE_CHILD` 的 deny（继承），导致别处用 FullControl/GENERIC_ALL 打开子目录被拒 —— 删除和普通读写不受影响。
+4. 工作区包含 TEMP 根会在授权前直接拒绝（YG 不成立：TEMP 在 `C:\Users\Akizuki\AppData\Local\Temp`）。
+
+## 18. 左上角 logo 替换（方法已查明，等图）
+
+网页端左上角的 logo 是 `dsh-client-ui-sidebar` 的 `_logoRow` → `_brandIdentity`，里面 `_brandMark` = `FishLogo`（鲸鱼）、`_brandName` = `BrandWordmark`（字标）。两个都是**内联 SVG、用 currentColor、没有 src**，所以换图不是改属性。
+
+品牌本身是**槽位**注册的，`dsh-client-ui-brand-official` 里就两行：
+
+```js
+ctx.slots.register({ name: "sidebar.brand.mark" }, OfficialBrandMark)   // FishLogo
+ctx.slots.register({ name: "sidebar.brand.name" }, OfficialBrandName)   // BrandWordmark
+```
+
+两条路：
+
+**A. 外壳注入（推荐，KokonaDSH 用这条）**
+在 `src/preload/index.ts` 里按类名**后缀**锚定（`_brandIdentity` / `_brandMark` / `_brandName` / `_logoRow` / `_railMark`），把官方 SVG 藏掉、给容器刷 PNG 作 background，并定死盒子尺寸（`_brandIdentity` 是 `height:24px` 的 inline-flex，藏掉子节点后会塌）。
+
+- PNG 用**内联 data URI**（页面是 `http://127.0.0.1:<port>`，`file://` 可能被 CSP 拦）：运行时从 asar 里 `readFileSync` 再 base64。
+- 好处：**安全模式下也生效**（安全模式禁用全部插件），不引入插件依赖，和现有整套注入一致。
+- 代价：锚在类名后缀上，DSH 改结构会失效（可恢复）。
+
+**B. 客户端插件占槽（设计上的正路）**
+写个客户端插件 `ctx.slots.register({ name: "sidebar.brand.mark" }, () => <img src={...} />)`，用 `dsh plugin --profile kokona add <pkg>` 装 —— 外壳的 `ensureProfile()` 就是这么装 `dsh-better-sidebar` 的（`src/main/core/profile.ts:88`）。
+
+- 好处：锚在**槽位 API** 上，比类名稳。
+- 代价：安全模式下不加载；要多一个包。
+- 待查：官方包已经占了同一个槽，多个 occupant 是替换还是叠加 —— 需要先确认 `dsh-client-ui-slots` 的 register 语义。
+
+**需要 YG 提供**：透明底 PNG + 期望显示高度（现在 `_brandIdentity` 高 24px）。图到手后 A 方案就是「一条 CSS + 一张图」。
+
+**结果（见 §19）**：图到了，是 SVG 不是 PNG；A 方案做了，但**不是** data URI / background —— 用内联 SVG 元素，原因在 §19。
+
+## 19. 1.0.2：更名 KokonaHarness + 品牌 logo + 首屏文案
+
+### 更名
+
+- 改成 `KokonaHarness`（无空格）：`APP_NAME` / `DISPLAY_NAME`、`package.json` 的 `name` + `description`、
+  `electron-builder.yml` 的 `productName` 与两个 `artifactName`、`renderer/index.html` 的 title、
+  终端窗口标题、两处 HTTP user-agent、`core/recovery.ts` 的补丁层头注释、`repack.cmd` 里 5 处 exe 名、
+  README / README.en / AGENTS。
+- **数据目录刻意不动。** `app.setName(APP_NAME)` 决定 `app.getPath('userData')`，改名会把
+  `%APPDATA%\KokonaDSH` 搬走 —— 配置、日志、已下载的内核全丢。`src/main/index.ts` 里加了
+  `app.setPath('userData', join(app.getPath('appData'), 'KokonaDSH'))` 钉死。**这一行不能删。**
+- `appId` 保持 `com.kokona.dsh`：AUMID 和任务栏固定项、通知身份绑在一起，改了只有坏处。
+- 自动更新：`src/main/shell-update.ts` 的 `REPO` 改成 `AkizukiKokona/KokonaHarness`，GitHub 与
+  Codeberg 两个 API 都从它派生。旧仓库和旧发行版不管，也不做迁移。
+- 还没做：提交、打 tag、发版。新仓库现在是空的，所以发版前点「检查更新」会报「没有已发布的发行版」——
+  预期行为。
+
+### 品牌 logo（替掉官方鲸鱼 + 字标）
+
+- 官方纵向尺寸：`FISH_LOGO_VIEWBOX = {width:23.16, height:17.04}`，`size:24` 时鲸鱼本体 **17.66px**；
+  `BrandWordmark`（`includeMark:false`）是 156×24，**24px**；`_brandIdentity` 也是 `height:24px`。
+  → **官方品牌块纵向 24px，YG 允许的 3 倍上限 = 72px。**
+- 素材 `resources/brand.svg`（仓库根的 `KokonaHARNESS.svg`，viewBox 72.867×24 ≈ 3.036:1），72px 高时
+  约 **219px 宽**。`electron-builder.yml` 的 `extraResources` 把它放到 `process.resourcesPath/brand.svg`。
+- 实现（`src/preload/index.ts` 的 `installBrand()`）：读进 SVG 后**作为内联 SVG 元素**插进
+  `_logoRow _brandIdentity`，`preserveAspectRatio="xMinYMid meet"` + `height:72px` + `max-width:100%`
+  → **居左**，侧栏窄了自动缩。CSS 同时把 `_logoRow` 从 40px / `overflow:hidden` 放开到
+  `min-height:76px` / `visible`，并把 `_brand`、`_brandIdentity` 强制 `justify-content:flex-start`。
+- **不是 data URI，也不是 background-image**（§18 那条推测作废）：`img-src` 可能回落到
+  `default-src 'none'`，更要紧的是 `#000` 得跟着主题走，而外部图片继承不到 `currentColor`。
+  所以 `installBrand()` 把 `fill="#000"` 全改写成 `currentColor`（深色主题下自动变浅），
+  金色 `#D2AB57` 和金色徽章底下的白底不动。
+- 兜底：资源读不到就什么都不做，`body[data-kokona-brand]` 不设，官方品牌原样留着 —— 不会出现空行。
+- React 重渲染会冲掉插进去的节点，所以统一进 `tick()`（600ms + MutationObserver）；两个守卫都是
+  「已经做过就直接返回」，不会自激。
+
+### 首屏文案 + 预览版角标
+
+- 文案是 i18n 串，不是槽位：`dsh-client-ui-conversation` 的 `"hero.headline": "探索未至之境"`
+  （英文 `Into the Unknown`）。JSX 是 `titleGroup > [<span>{headline}</span>, <span class=previewBadge>]`，
+  标题那个 span **没有 class**，所以按结构锚 `[class*="_titleGroup"] > :first-child`，
+  `installHeroCopy()` 换成 **沐浴晨光，方得救赎！**。换完就不再匹配源串，不会反复写。
+- 角标 `_previewBadge` 原本是 `background: var(--dsw-alias-state-business-tertiary)` 的实心胶囊，
+  完全没有毛玻璃。CSS 只改表面：`color-mix(… --dsw-alias-state-business-primary 14% …)` 淡蓝底 +
+  34% 淡蓝描边 + `backdrop-filter: blur(10px) saturate(1.6)`。**位置、圆角、padding、`align-self`
+  一律不动**，所以它还贴在文案右上角原地。
+
+### 验证
+
+`npm run typecheck` 通过（exit 0）；`npm run build` 通过，产物 `out/main/index.js` 77.96 kB、
+`out/preload/index.js` 55.62 kB（加入品牌注入后从 51.45 kB 长上来）、`out/renderer/*` 齐全。
+**未做**：没有真正启动应用看效果（会杀掉正在跑的内核），所以 72px 的实际观感、深色主题下的
+`currentColor` 效果、以及首屏文案替换的时序都还是纸面结论。
+

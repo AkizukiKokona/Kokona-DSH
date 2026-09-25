@@ -11,6 +11,10 @@ const preloadPath = join(__dirname, '../preload/index.js')
 const shell = new Shell()
 
 app.setName(APP_NAME)
+// The product was renamed to KokonaHarness in 1.0.2. Pin the data directory to
+// its original name so an in-place upgrade keeps its config, logs and the
+// already-downloaded core instead of re-fetching everything into a new folder.
+app.setPath('userData', join(app.getPath('appData'), 'KokonaDSH'))
 if (process.platform === 'win32') app.setAppUserModelId('com.kokona.dsh')
 
 function showMainWindow(): void {
@@ -51,7 +55,7 @@ if (!gotLock) {
       setTimeout(() => {
         try {
           const out = execSync(
-            'powershell -NoProfile -Command "(Get-Process | Where-Object { $_.MainWindowHandle -ne 0 -and $_.MainWindowTitle -eq \'Kokona DSH Terminal\' } | ForEach-Object { $_.ProcessName + \':\' + $_.MainWindowTitle }) -join \' | \'"'
+            'powershell -NoProfile -Command "(Get-Process | Where-Object { $_.MainWindowHandle -ne 0 -and $_.MainWindowTitle -eq \'KokonaHarness Terminal\' } | ForEach-Object { $_.ProcessName + \':\' + $_.MainWindowTitle }) -join \' | \'"'
           )
             .toString()
             .trim()

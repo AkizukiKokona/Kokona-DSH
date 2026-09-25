@@ -4,7 +4,7 @@ import { loadConfig } from './config'
 import { createLogger } from './logger'
 
 const log = createLogger('update')
-const REPO = 'AkizukiKokona/Kokona-DSH'
+const REPO = 'AkizukiKokona/KokonaHarness'
 const GITHUB_API = `https://api.github.com/repos/${REPO}/releases/latest`
 const CODEBERG_API = `https://codeberg.org/api/v1/repos/${REPO}/releases?limit=1`
 
@@ -30,7 +30,7 @@ function compare(a: string, b: string): number {
 
 async function fetchJson<T>(url: string): Promise<T> {
   const response = await fetch(url, {
-    headers: { accept: 'application/json', 'user-agent': 'KokonaDSH' },
+    headers: { accept: 'application/json', 'user-agent': 'KokonaHarness' },
     signal: AbortSignal.timeout(8000)
   })
   if (!response.ok) throw new Error(`HTTP ${response.status}`)

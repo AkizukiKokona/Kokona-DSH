@@ -5,7 +5,7 @@ const encoded = encodeURIComponent(DSH_PACKAGE).replace('%40', '@')
 
 async function fetchJson<T>(url: string): Promise<T> {
   const response = await fetch(url, {
-    headers: { accept: 'application/json', 'user-agent': 'KokonaDSH' },
+    headers: { accept: 'application/json', 'user-agent': 'KokonaHarness' },
     signal: AbortSignal.timeout(8000)
   })
   if (!response.ok) throw new Error(`registry ${response.status} for ${url}`)

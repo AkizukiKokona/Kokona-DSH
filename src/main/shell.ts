@@ -12,6 +12,7 @@ import { resolveNodeExecutable } from './node'
 import { defaultDshHome, dshBinPath, versionDir } from './paths'
 import { checkForUpdate, ensureCore, getActiveVersion, installVersion, listInstalledVersions, switchTo } from './runtime/manager'
 import { openTerminal } from './terminal'
+import { startWorkspaceAclPreflight } from './workspace-acl'
 import { getMainWindow, getPanelWindow, showBootScreen } from './windows'
 
 const log = createLogger('shell')
@@ -140,6 +141,13 @@ export class Shell {
       }
       const config = loadConfig()
       const dshHome = config.dshHome ?? defaultDshHome()
+
+      // Best-effort and deliberately unawaited: a workspace on a drive that
+      // grants only Modify fails the sandbox's own grant, and this is what puts
+      // WRITE_OWNER there first. It never blocks or fails a boot.
+      if (config.fixWorkspaceAcl) {
+        startWorkspaceAclPreflight(dshHome, (line) => this.logLine(line))
+      }
 
       this.setPhase('resolving-runtime')
       const nodeExe = resolveNodeExecutable()

@@ -1,6 +1,6 @@
 # AGENTS
 
-KokonaDSH is an Electron shell around the public DeepSeek Harness (`@deepseek-ai/dsh`) CLI.
+KokonaHarness is an Electron shell around the public DeepSeek Harness (`@deepseek-ai/dsh`) CLI.
 
 ## Layout
 
@@ -12,7 +12,7 @@ KokonaDSH is an Electron shell around the public DeepSeek Harness (`@deepseek-ai
 ## Rules
 
 - Never patch or fork the DSH core. Spawn the public CLI only.
-- Do not use the reserved `desktop` profile; the CLI rejects it. KokonaDSH uses `kokona`.
+- Do not use the reserved `desktop` profile; the CLI rejects it. KokonaHarness uses `kokona`.
 - The titlebar must never block app interaction. Drag surfaces are computed as the gaps between
   interactive elements, never a full-width overlay.
 - Do not touch `--dsh-sidebar-height` or reserve right-column width; that belongs to better-sidebar.

@@ -41,6 +41,8 @@ export interface AppConfig {
   safeMode: boolean
   lastTheme: 'dark' | 'light' | null
   updateSource: UpdateSource
+  /** Windows only: keep every known workspace granting this account WRITE_OWNER. */
+  fixWorkspaceAcl: boolean
 }
 
 export interface RuntimeSnapshot {

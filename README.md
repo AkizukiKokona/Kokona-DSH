@@ -1,6 +1,8 @@
-# KokonaDSH
+# KokonaHarness
 
 [English](README.en.md) | 简体中文
+
+> **1.0.2 起更名为 KokonaHarness。** 仓库迁到 [GitHub](https://github.com/AkizukiKokona/KokonaHarness) 与 [Codeberg](https://codeberg.org/AkizukiKokona/KokonaHarness)，外壳内置的自动更新已指向新仓库；旧仓库和旧发行版不再维护，也不做迁移。数据目录仍叫 `%APPDATA%\KokonaDSH` —— 刻意保留原名（`app.setPath('userData', ...)` 钉住了），免得升级时把已经下好的内核重下一遍。
 
 一个 DeepSeek Harness（`dsh`）桌面外壳。Electron + 网页渲染的内核，补上现有那些半成品桌面端缺的两件事：
 
@@ -10,7 +12,7 @@
 ## 架构
 
 ```
-KokonaDSH（Electron 外壳）
+KokonaHarness（Electron 外壳）
   main/            应用生命周期、窗口、IPC
     runtime/       内核版本管理（基线 + npm 频道）
     core/          profile 初始化 + 启动 dsh 进程 + 就绪探测
@@ -28,17 +30,17 @@ DSH 内核（@deepseek-ai/dsh）  <- 按版本装到 <userData>/runtime/<version
 
 注入到 DSH 网页里（从不改内核）：
 
-- **设置头部按钮。** DSH 设置面板的内容列头部有 `settings.action` 槽（内置的"打开配置文件"按钮就在这）。KokonaDSH 往这里追加两个同级按钮，样式直接克隆现有按钮的 class：
+- **设置头部按钮。** DSH 设置面板的内容列头部有 `settings.action` 槽（内置的"打开配置文件"按钮就在这）。KokonaHarness 往这里追加两个同级按钮，样式直接克隆现有按钮的 class：
   - **DSH 终端** —— 在 `DSH_HOME` 打开平台终端，并把当前内核的 `node_modules/.bin` 加进 `PATH`，进去即可直接用 `dsh`。
   - **重启菜单** —— 下拉：*重新加载界面*、*重启*、*重启进安全模式*。
 - **设置里的"检查更新"选项卡。** 往设置导航注入一个导航项，面板分两段：
   - **内核更新**（上）：对比 npm 频道、安装新内核版本、在已安装版本间切换、重启内核。
-  - **外壳更新**（下）：检查 KokonaDSH 本身是否有新发行版。国内优先 Codeberg，国外优先 GitHub（`updateSource` 可强制）；只检查发行版，有更新时给一个"打开发行页"按钮。
+  - **外壳更新**（下）：检查 KokonaHarness 本身是否有新发行版。国内优先 Codeberg，国外优先 GitHub（`updateSource` 可强制）；只检查发行版，有更新时给一个"打开发行页"按钮。
 - **安全模式** 启动一个从官方 `web` 模板生成的兄弟 profile `<profile>-safe`，不加载任何插件。这就是 CLI 文档里的 `dsh --profile rescue --from-default-profile web`。
 - **插件市场。** `dshmarket`（"DSH 可视化插件市场"）作为预设插件安装。
-- **关闭右栏时隐藏残留面板。** DSH 在右栏折叠后仍把 `[data-sidebar-right-panel]` 挂载且可见（`position:absolute`、相对 0 宽的 `_rightbarCol` 向右锚定、`pointer-events:none`）。壁纸类插件会给这个面板套侧栏毛玻璃且不判断开关状态，导致右半屏出现一层半透明模糊。KokonaDSH 会在 `_rightbarCol` 宽度归零时把该面板 `display:none`，展开时恢复。
+- **关闭右栏时隐藏残留面板。** DSH 在右栏折叠后仍把 `[data-sidebar-right-panel]` 挂载且可见（`position:absolute`、相对 0 宽的 `_rightbarCol` 向右锚定、`pointer-events:none`）。壁纸类插件会给这个面板套侧栏毛玻璃且不判断开关状态，导致右半屏出现一层半透明模糊。KokonaHarness 会在 `_rightbarCol` 宽度归零时把该面板 `display:none`，展开时恢复。
 
-窗口标题强制为 `Kokona DSH`（拦截 `page-title-updated`），DSH 页面自己的 document title 不会改掉窗口名。
+窗口标题强制为 `KokonaHarness`（拦截 `page-title-updated`），DSH 页面自己的 document title 不会改掉窗口名。
 
 设置里的锚点是结构化的，不用 hash 类名：操作容器是紧挨设置关闭按钮（`button[class*="_close"]`）之前、class 以 `_actions` 结尾的元素；导航列表是面板下的 `[class*="_navList"]`。React 重渲染由 `MutationObserver` 兜底重注入。
 

@@ -25,6 +25,7 @@ function mergeConfig(raw: unknown): AppConfig {
   if (raw.updateSource === 'auto' || raw.updateSource === 'github' || raw.updateSource === 'codeberg') {
     base.updateSource = raw.updateSource
   }
+  if (typeof raw.fixWorkspaceAcl === 'boolean') base.fixWorkspaceAcl = raw.fixWorkspaceAcl
   if (isRecord(raw.titlebar)) {
     const tb = raw.titlebar
     if (typeof tb.height === 'number' && tb.height > 0) base.titlebar.height = tb.height

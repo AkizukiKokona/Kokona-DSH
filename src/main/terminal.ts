@@ -1,6 +1,7 @@
 import { spawn } from 'node:child_process'
 import { existsSync } from 'node:fs'
 import { delimiter } from 'node:path'
+import { DISPLAY_NAME } from '../shared/constants'
 import { createLogger } from './logger'
 
 const log = createLogger('terminal')
@@ -35,8 +36,9 @@ export function openTerminal({ dshHome, env, binDirs = [] }: TerminalOptions): v
     // stdio:'ignore' gives powershell a NUL stdin, so -NoExit still exits at
     // once and the window never shows. `start` opens a fresh console owned by
     // the new process, which survives on its own.
-    const command = `$host.UI.RawUI.WindowTitle = 'Kokona DSH Terminal'; Set-Location -LiteralPath ${psQuote(dshHome)}`
-    launch('cmd.exe', ['/c', 'start', 'Kokona DSH Terminal', 'powershell.exe', '-NoLogo', '-NoExit', '-Command', command], {
+    const title = `${DISPLAY_NAME} Terminal`
+    const command = `$host.UI.RawUI.WindowTitle = ${psQuote(title)}; Set-Location -LiteralPath ${psQuote(dshHome)}`
+    launch('cmd.exe', ['/c', 'start', title, 'powershell.exe', '-NoLogo', '-NoExit', '-Command', command], {
       cwd: dshHome,
       env: childEnv,
       stdio: 'ignore',

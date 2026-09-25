@@ -1,12 +1,12 @@
 @echo off
 setlocal enableextensions
-title Kokona DSH - repack
+title KokonaHarness - repack
 
 cd /d "%~dp0"
 set "PATH=C:\Program Files\nodejs;%PATH%"
 
 echo ==========================================
-echo   Kokona DSH - rebuild + repack + relaunch
+echo   KokonaHarness - rebuild + repack + relaunch
 echo ==========================================
 echo.
 
@@ -18,9 +18,9 @@ if errorlevel 1 (
 )
 
 :wait
-tasklist /FI "IMAGENAME eq Kokona DSH.exe" 2>nul | find /I "Kokona DSH.exe" >nul
+tasklist /FI "IMAGENAME eq KokonaHarness.exe" 2>nul | find /I "KokonaHarness.exe" >nul
 if not errorlevel 1 (
-  echo [.] Kokona DSH.exe is still running.
+  echo [.] KokonaHarness.exe is still running.
   echo     Closing the window does NOT quit it - it hides to the tray.
   echo     Quit it from the tray icon, then this window continues on its own.
   echo     Waiting...
@@ -40,7 +40,7 @@ rem Launch through explorer.exe instead of "start". Electron attaches to the
 rem parent console, so an app started with "start" gets killed when this window
 rem is closed. explorer.exe has no console and is not inside this console job
 rem object, so the relaunched app is completely independent of this script.
-explorer.exe "%~dp0release\win-unpacked\Kokona DSH.exe"
+explorer.exe "%~dp0release\win-unpacked\KokonaHarness.exe"
 echo.
 echo Done. Closing this window is safe - the app is independent now.
 ping -n 3 127.0.0.1 >nul
