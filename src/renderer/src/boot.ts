@@ -117,7 +117,7 @@ function renderBoot(): void {
   const logs = el('pre', 'logs', '')
   details.append(kv, el('h2', undefined, '内核日志'), logs)
 
-  const blessing = el('div', 'splash__blessing', '沐浴晨光 方得救赎')
+  const blessing = el('div', 'splash__blessing', '“沐浴晨光方得救赎”')
 
   main.append(center, details, blessing)
   root.append(main)

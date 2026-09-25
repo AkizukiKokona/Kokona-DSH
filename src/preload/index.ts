@@ -263,20 +263,23 @@ body[data-we-sidebar-glass] [data-sidebar-right-panel][data-sidebar-right-open] 
 /* better-sidebar's bottom dock (the workbench that slides up from the bottom, and
    holds the terminal / browser / preview panes). Its own fill is
    background: var(--dsw-alias-bg-layer-1) — an opaque #fff, because the wallpaper
-   plugin only re-tints that token inside the settings dialog — and the plugin tints
-   the surfaces inside it (terminalWrap, browserBar, paneCard) with the 侧栏 sliders,
-   so the bar reads as a solid sheet rather than as the composer's glass. Give the
-   dock the composer's veil as its own fill, and feed the variables its children
-   consume from the composer instead of the 侧栏: same blur radius, the composer's
-   veil alpha, flat saturation, full sheen — and the glass colour, because the 侧栏
-   colour (a cyan here) mixed into every surface inside the dock is what made the
-   whole bar read as cyan rather than as plain glass. */
+   plugin only re-tints that token inside the settings dialog, and the plugin never
+   matches this class at all — so the dock was a solid sheet with the 侧栏 tint on the
+   surfaces inside it. Reproduce the RIGHT panel's recipe verbatim instead: the log
+   shows that panel computing to color(srgb .404 .863 .906 / .1648) — the 侧栏 colour
+   at --we-sidebar-tint — with backdrop-filter blur(16px) saturate(1.3)
+   brightness(1.04) contrast(1.01). Its blur radius is the composer's (--we-blur),
+   because the tint slider is driven by the glass alpha, which is why the panel reads
+   as frosted glass rather than as a cyan sheet. The colour itself is deliberately NOT
+   overridden: at 16% over a blurred wallpaper it is the same tint the right panel
+   has. A first attempt painted this with --kokona-surface-glass (a 0.72 chip veil)
+   and went solid white — that value is for small chips, never a full-width panel. */
 body[data-we-sidebar-glass] [class*="_bottomPanel"] {
-  background-color: var(--kokona-surface-glass) !important;
-  --we-sidebar-color: var(--we-glass-color, #ffffff);
+  background-color: color-mix(in srgb, var(--we-sidebar-color, #ffffff) var(--we-sidebar-tint, 20%), transparent) !important;
+  backdrop-filter: blur(var(--we-sidebar-blur, 16px)) saturate(var(--we-sidebar-saturate, 1.3)) brightness(var(--we-glass-brightness, 1.04)) contrast(1.01) !important;
+  -webkit-backdrop-filter: blur(var(--we-sidebar-blur, 16px)) saturate(var(--we-sidebar-saturate, 1.3)) brightness(var(--we-glass-brightness, 1.04)) contrast(1.01) !important;
   --we-sidebar-blur: var(--we-blur, 16px);
   --we-sidebar-tint: calc(var(--we-glass-alpha, 0.2) * 80%);
-  --we-sidebar-saturate: var(--we-saturate, 1.8);
   --we-sidebar-sheen: 1;
 }
 /* The 轨迹 (trajectory) view is a whole page painted with --dsw-alias-bg-layer-1 —

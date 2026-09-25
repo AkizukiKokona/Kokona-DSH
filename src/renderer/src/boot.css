@@ -317,8 +317,11 @@ main.splash {
   transform: translateX(-50%);
   color: var(--muted);
   font-size: 13px;
-  letter-spacing: 0.3em;
-  text-indent: 0.3em;
+  /* Was 0.3em, which spaced the six characters out into something that read as a
+     gap in the middle of the line. Set tight; the indent matches it so the optical
+     centre stays put. */
+  letter-spacing: 0.06em;
+  text-indent: 0.06em;
   white-space: nowrap;
   pointer-events: none;
   user-select: none;
