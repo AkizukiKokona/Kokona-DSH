@@ -1,5 +1,5 @@
 import { join } from 'node:path'
-import { app, globalShortcut, Menu } from 'electron'
+import { app, BrowserWindow, globalShortcut, Menu } from 'electron'
 import { APP_NAME } from '../shared/constants'
 import { registerIpc } from './ipc'
 import { isQuitting, setQuitting } from './lifecycle'
@@ -61,7 +61,8 @@ if (!gotLock) {
     globalShortcut.unregisterAll()
     void shell.stop().finally(() => {
       destroyTray()
-      app.exit(0)
+      for (const window of BrowserWindow.getAllWindows()) window.destroy()
+      app.quit()
     })
   })
 }

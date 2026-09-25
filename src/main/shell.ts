@@ -2,7 +2,7 @@ import { app } from 'electron'
 import { join } from 'node:path'
 import { IPC, SAFE_PROFILE_SUFFIX } from '../shared/constants'
 import type { BootPhase, RuntimeSnapshot } from '../shared/types'
-import { loadConfig } from './config'
+import { loadConfig, patchConfig } from './config'
 import { buildCoreEnv } from './core/env'
 import { ensureProfile } from './core/profile'
 import { CoreProcess, findFreePort } from './core/process'
@@ -82,6 +82,7 @@ export class Shell {
     if (this.starting) return false
     this.starting = true
     this.error = null
+    this.safeMode = loadConfig().safeMode === true
     try {
       const config = loadConfig()
       const dshHome = config.dshHome ?? defaultDshHome()
@@ -148,12 +149,20 @@ export class Shell {
   }
 
   async restart(options: { safe?: boolean } = {}): Promise<boolean> {
-    this.safeMode = options.safe === true
+    if (typeof options.safe === 'boolean') patchConfig({ safeMode: options.safe })
     this.notice = null
     await this.core.stop()
     this.serverUrl = null
     this.phase = 'idle'
     return this.boot()
+  }
+
+  async relaunch(options: { safe?: boolean } = {}): Promise<void> {
+    if (typeof options.safe === 'boolean') patchConfig({ safeMode: options.safe })
+    this.notice = null
+    this.broadcast()
+    app.relaunch()
+    app.quit()
   }
 
   async stop(): Promise<void> {

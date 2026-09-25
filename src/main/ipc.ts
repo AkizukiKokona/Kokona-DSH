@@ -40,6 +40,7 @@ export function registerIpc(shell: Shell): void {
   ipcMain.handle(IPC.switchCore, (_event, version: string) => shell.switch(version))
   ipcMain.handle(IPC.restartCore, () => shell.restart())
   ipcMain.handle(IPC.restartSafe, () => shell.restart({ safe: true }))
+  ipcMain.handle(IPC.relaunchApp, (_event, safe: unknown) => shell.relaunch({ safe: safe === true }))
   ipcMain.handle(IPC.reloadUi, () => shell.reloadUi())
   ipcMain.handle(IPC.openTerminal, () => shell.openTerminal())
   ipcMain.handle(IPC.revealData, () => electronShell.openPath(userDataDir()))

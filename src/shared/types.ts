@@ -38,6 +38,7 @@ export interface AppConfig {
   presetPlugins: string[]
   titlebar: TitlebarConfig
   autoUpdateCore: boolean
+  safeMode: boolean
   lastTheme: 'dark' | 'light' | null
   updateSource: UpdateSource
 }

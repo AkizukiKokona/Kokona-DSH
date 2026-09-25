@@ -20,6 +20,7 @@ function mergeConfig(raw: unknown): AppConfig {
     base.presetPlugins = raw.presetPlugins.filter((item): item is string => typeof item === 'string')
   }
   if (typeof raw.autoUpdateCore === 'boolean') base.autoUpdateCore = raw.autoUpdateCore
+  if (typeof raw.safeMode === 'boolean') base.safeMode = raw.safeMode
   if (raw.lastTheme === 'dark' || raw.lastTheme === 'light') base.lastTheme = raw.lastTheme
   if (raw.updateSource === 'auto' || raw.updateSource === 'github' || raw.updateSource === 'codeberg') {
     base.updateSource = raw.updateSource

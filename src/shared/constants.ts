@@ -27,6 +27,7 @@ export const DEFAULT_CONFIG: AppConfig = {
     insetRight: 0
   },
   autoUpdateCore: false,
+  safeMode: false,
   lastTheme: null,
   updateSource: 'auto'
 }
@@ -41,6 +42,7 @@ export const IPC = {
   switchCore: 'kokona:switch-core',
   restartCore: 'kokona:restart-core',
   restartSafe: 'kokona:restart-safe',
+  relaunchApp: 'kokona:relaunch-app',
   reloadUi: 'kokona:reload-ui',
   openTerminal: 'kokona:open-terminal',
   getConfig: 'kokona:get-config',

@@ -12,6 +12,7 @@ const api: KokonaApi = {
   switchCore: (version) => ipcRenderer.invoke(IPC.switchCore, version) as Promise<void>,
   restartCore: () => ipcRenderer.invoke(IPC.restartCore) as Promise<void>,
   restartSafe: () => ipcRenderer.invoke(IPC.restartSafe) as Promise<void>,
+  relaunchApp: (safe) => ipcRenderer.invoke(IPC.relaunchApp, safe) as Promise<void>,
   reloadUi: () => ipcRenderer.send(IPC.reloadUi),
   openTerminal: () => ipcRenderer.invoke(IPC.openTerminal) as Promise<void>,
   revealData: () => ipcRenderer.invoke(IPC.revealData) as Promise<string>,
@@ -297,6 +298,11 @@ function closeMenu(): void {
   menuCleanup = null
 }
 
+let safeModeActive = false
+api.onSnapshot((snapshot) => {
+  safeModeActive = snapshot.safeMode
+})
+
 function openRestartMenu(anchor: HTMLElement, zh: boolean): void {
   if (menuEl) {
     closeMenu()
@@ -307,9 +313,18 @@ function openRestartMenu(anchor: HTMLElement, zh: boolean): void {
   menu.className = MENU_CLASS
   const items: Array<[string, boolean, () => void]> = [
     [zh ? '重新加载界面' : 'Reload interface', false, () => api.reloadUi()],
-    [zh ? '重启' : 'Restart', false, () => void api.restartCore()],
-    [zh ? '重启进安全模式（屏蔽全部插件）' : 'Restart in safe mode (all plugins off)', true, () => void api.restartSafe()]
+    [zh ? '重启客户端' : 'Restart app', false, () => void api.relaunchApp(safeModeActive)],
+    [zh ? '仅重启内核' : 'Restart core only', false, () => void api.restartCore()]
   ]
+  if (safeModeActive) {
+    items.push([zh ? '退出安全模式并重启' : 'Leave safe mode and restart', false, () => void api.relaunchApp(false)])
+  } else {
+    items.push([
+      zh ? '重启进安全模式（屏蔽全部插件）' : 'Restart in safe mode (all plugins off)',
+      true,
+      () => void api.relaunchApp(true)
+    ])
+  }
   for (const [label, danger, action] of items) {
     const button = document.createElement('button')
     button.type = 'button'
@@ -369,7 +384,9 @@ function injectSettingsActions(): void {
   terminal.title = zh ? '在 DSH_HOME 打开终端，dsh 可直接使用' : 'Open a terminal at DSH_HOME with dsh on PATH'
   terminal.addEventListener('click', () => void api.openTerminal())
   const restart = makeSettingsButton(zh ? '重启菜单' : 'Restart menu', templateClass)
-  restart.title = zh ? '重新加载界面 / 重启 / 重启进安全模式' : 'Reload / restart / restart in safe mode'
+  restart.title = zh
+    ? '重新加载界面 / 重启客户端 / 仅重启内核 / 安全模式'
+    : 'Reload / restart app / restart core only / safe mode'
   restart.addEventListener('click', (event) => {
     event.stopPropagation()
     openRestartMenu(restart, zh)

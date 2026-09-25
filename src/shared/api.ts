@@ -15,6 +15,7 @@ export interface KokonaApi {
   switchCore(version: string): Promise<void>
   restartCore(): Promise<void>
   restartSafe(): Promise<void>
+  relaunchApp(safe: boolean): Promise<void>
   reloadUi(): void
   openTerminal(): Promise<void>
   revealData(): Promise<string>
