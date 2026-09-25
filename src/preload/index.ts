@@ -275,6 +275,19 @@ body[data-we-sidebar-glass] [class*="_bottomPanel"] {
   --we-sidebar-saturate: var(--we-saturate, 1.8);
   --we-sidebar-sheen: 1;
 }
+/* The 轨迹 (trajectory) view is a whole page painted with --dsw-alias-bg-layer-1 —
+   qBU-ya_root on the outside, then the split, the table and the details column — so
+   it reads as one solid white sheet instead of the wallpaper. YG wants it like a
+   normal conversation: no base at all. The :has([data-trajectory-scroll]) guard can
+   only match ancestors of the trajectory's own scroll pane, so the _root / _split /
+   _table / _details suffixes cannot catch anything else on the page. */
+[class*="_root"]:has([data-trajectory-scroll]),
+[class*="_split"]:has([data-trajectory-scroll]),
+[class*="_table"]:has([data-trajectory-scroll]),
+[class*="_details"]:has([data-trajectory-scroll]),
+[data-trajectory-scroll] {
+  background-color: transparent !important;
+}
 `
   document.head.appendChild(style)
 }

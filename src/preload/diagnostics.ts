@@ -56,7 +56,11 @@ const CANDIDATES = [
   '[class*="_portal"]',
   '[role="menu"]',
   '[class*="_itemWrap"]',
-  '[class*="_item"]'
+  '[class*="_item"]',
+  '[data-trajectory-scroll]',
+  '[class*="_table"]',
+  '[class*="_details"]',
+  '[class*="_toolbar"]'
 ]
 
 function describe(element: Element): string {
@@ -65,12 +69,41 @@ function describe(element: Element): string {
   const cls = (element.getAttribute('class') ?? '').split(/\s+/).filter(Boolean).join('.')
   const text = (element.textContent ?? '').replace(/\s+/g, ' ').slice(0, 36)
   const backdrop = style.getPropertyValue('backdrop-filter') || style.getPropertyValue('-webkit-backdrop-filter')
+  const inline = (element.getAttribute('style') ?? '').replace(/\s+/g, ' ').slice(0, 90)
   return (
     `${element.tagName.toLowerCase()}.${cls}` +
     ` @${Math.round(rect.x)},${Math.round(rect.y)} ${Math.round(rect.width)}x${Math.round(rect.height)}` +
-    ` bg=${style.backgroundColor} bf=${backdrop || 'none'} z=${style.zIndex} kids=${element.childElementCount}` +
-    ` "${text}"`
+    ` bg=${style.backgroundColor} bf=${backdrop || 'none'} z=${style.zIndex}` +
+    ` vis=${style.visibility} disp=${style.display} op=${style.opacity} kids=${element.childElementCount}` +
+    ` inline="${inline}" "${text}"`
   )
+}
+
+/**
+ * Stable identity per element. The first run keyed the change log by selector, so a
+ * selector matching several nodes (every `_list`, every `_root`) made different
+ * elements overwrite each other and look like one node changing shape.
+ */
+const ids = new WeakMap<Element, number>()
+let nextId = 0
+function idOf(element: Element): number {
+  let id = ids.get(element)
+  if (id === undefined) {
+    id = nextId++
+    ids.set(element, id)
+  }
+  return id
+}
+
+/** The children of a floating menu, which is where a width change would show up. */
+function childrenOf(element: Element): string {
+  const parts: string[] = []
+  for (const child of Array.from(element.children).slice(0, 6)) {
+    const rect = child.getBoundingClientRect()
+    const cls = (child.getAttribute('class') ?? '').split(/\s+/).filter(Boolean).slice(-1)[0] ?? ''
+    parts.push(`${cls || child.tagName.toLowerCase()}=${Math.round(rect.width)}x${Math.round(rect.height)}`)
+  }
+  return parts.join(' ')
 }
 
 /** Start sampling when the flag file is present. Safe to call once per page. */
@@ -94,8 +127,12 @@ export function installDiagnostics(): void {
 
   const sample = (tag: string) => {
     for (const selector of CANDIDATES) {
-      for (const element of document.querySelectorAll(selector)) {
-        record(tag, selector, describe(element))
+      const matches = document.querySelectorAll(selector)
+      if (matches.length > 1) record(tag, `${selector} count`, String(matches.length))
+      for (const element of matches) {
+        const id = idOf(element)
+        const value = `${describe(element)} children[${childrenOf(element)}]`
+        record(tag, `${selector} #${id}`, value)
       }
     }
   }
@@ -109,7 +146,7 @@ export function installDiagnostics(): void {
       if (!/panel|bottom|terminal|dock|workbench|status|xterm/i.test(cls)) continue
       const rect = element.getBoundingClientRect()
       if (rect.height < 4 || rect.top < limit) continue
-      record('sweep', cls, describe(element))
+      record('sweep', `${cls} #${idOf(element)}`, describe(element))
     }
   }
 

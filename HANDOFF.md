@@ -515,7 +515,27 @@ body[data-we-sidebar-glass] [class*="_bottomPanel"] {
 }
 ```
 
-### 「打开方式」下拉菜单的抖动（`dsh-client-ui-open-in-app`）
+### 「轨迹」页的纯白底
+
+`dsh-client-ui-trajectory` 的整页都铺 `--dsw-alias-bg-layer-1`：最外层 `qBU-ya_root`，里面 `Y0dWHa_split`、`Y0dWHa_table`、`Y0dWHa_details`（右侧详情列）也都是。在对话作用域里 `bg-layer-1` 已被我重映射成 `--kokona-surface-glass`，所以整页是一块 0.72 的白 —— YG 要的是「跟一般对话一样，干脆不要底」。
+
+锚点用**轨迹自己的滚动容器** `data-trajectory-scroll`（包内 JSX 里写死的，`TrajectoryTable` 的 `tablePane`）。用 `:has([data-trajectory-scroll])` 把 `_root` / `_split` / `_table` / `_details` 这四个后缀限制成「必须是轨迹滚动容器的祖先」—— 否则这些后缀太泛、会误伤别处。
+
+```css
+[class*="_root"]:has([data-trajectory-scroll]),
+[class*="_split"]:has([data-trajectory-scroll]),
+[class*="_table"]:has([data-trajectory-scroll]),
+[class*="_details"]:has([data-trajectory-scroll]),
+[data-trajectory-scroll] { background-color: transparent !important; }
+```
+
+内部的内容面板（`assistantOutput` / `programPanel` / `schema` / `promptDiff` / `overviewPreview` / 顶部工具栏 `fV0t5q_root`）**没动** —— 它们是内容面不是页面底。要一起透明再说。
+
+### 底栏那条（已用日志验证）
+
+`diag.log` 203461ms：`div.nArs4W_bottomPanel @280,1017 1046x221 bg=rgba(255,255,255,0.72)` —— 打开状态下就是我给的玻璃，不再是 `bg-layer-1` 的实心白。里面的 `_paneCard` 是 `color(srgb 0.403922 0.862745 0.905882 / 0.1236)` = `#67DCE7` 的 12.36%，即插件按重定向后的 `--we-sidebar-tint` 刷的侧栏色 —— 与右侧栏同一套处理，符合预期。
+
+### 「打开方式」菜单抖动（`dsh-client-ui-open-in-app`）
 
 现象：点右上角的打开方式按钮，菜单弹出来后**在几种高度之间反复伸缩**，一直循环。
 
@@ -523,8 +543,9 @@ body[data-we-sidebar-glass] [class*="_bottomPanel"] {
 
 - 组件是 `OpenTargetButton`（前缀 `OMoRSG_`），按钮上有 `data-open-target` / `data-open-path-more` / `data-state`，`aria-haspopup="menu"`。
 - 菜单是 `dsh-client-ui-primitives` 的 `Menu`，`portal: true`、`align: "end"`、`dense: true`，条目 = `applications` 列表（+ `failed` 时追加一条不可用行，文件型还有 `footer` 的「显示位置」）。
-- `Menu.module.css` 里 `.itemLabel` 是 `white-space: nowrap`，所以标签不会换行 —— 菜单变高只可能来自**条目数变化**（`applications` 或 `failed` 抖动），不是文本折行。
-- 菜单是 portal 出去的，不在标题栏留白（`topStripClusters`）会改的节点里，所以**留白代码改不动它的尺寸**（只可能挪锚点）。留白那边本来就有「两次测量一致才写入」的保护。
+- `Menu.module.css` 里 `.itemLabel` 是 `white-space: nowrap`，所以标签不会换行；菜单变高只可能来自**条目数变化**。
+- 菜单是 portal 出去的，不在标题栏留白（`topStripClusters`）会改的节点里。**第一次诊断已证实**：菜单出现的时间窗（190s 之后）里 `shift` / `layout pending` **零条**；仅有的几条在 167–175s，是按钮被 React 重建时重新应用 4px 留白，属预期。
+- 第一次诊断的日志**不可信**：`record()` 的 key 用的是**选择器**，一个选择器匹配多个节点时它们互相覆盖，看起来就像「同一个节点在反复变宽」。菜单那三条 `x/w`（187/238/289）其实是**不同元素**，右边缘都落在 1226 是 `align: end` 右对齐的必然结果。已修：按元素分配稳定 id（`WeakMap`）+ 记录 `inline style`、`visibility/display/opacity`、子节点尺寸、每个选择器的匹配数量。
 
 ### 诊断机制（临时，1.0.2 发版前删掉）
 
@@ -535,5 +556,6 @@ shell 没有 DOM 检查器，页面也看不见，所以加了 `src/preload/diag
 ### 新踩的坑
 
 - **CSS 注释里写反引号会把模板字符串提前结束**。注入样式是一整个 `` `...` `` 模板字面量，注释里写 `` `background: var(...)` `` 直接 `TS1005`。这个坑我踩了两次（第 4 节和第 16 节各一次），写注释时不要用反引号。
+- **采样日志的 key 必须带元素身份**。用选择器当 key，遇到 `querySelectorAll` 匹配多个节点（`_list`、`_root`）时后一个会覆盖前一个，日志读起来就像「同一个元素在抖」。第一版诊断就是这么把我自己带偏的，改成 `WeakMap` 分配 id 之后才对。
 - `pwsh` 里 `Select-String -Path (Join-Path ...)` 遍历 `@deepseek-ai` 下所有包会因为很多包没有 `lib/client.js` 而刷满错误 —— 先 `Test-Path` 或直接列目录。
 
