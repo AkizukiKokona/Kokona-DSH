@@ -1,5 +1,5 @@
 import { app } from 'electron'
-import { join } from 'node:path'
+import { dirname, join } from 'node:path'
 import { IPC, SAFE_PROFILE_SUFFIX } from '../shared/constants'
 import type { BootPhase, RuntimeSnapshot } from '../shared/types'
 import { loadConfig, patchConfig } from './config'
@@ -178,7 +178,9 @@ export class Shell {
     const dshHome = config.dshHome ?? defaultDshHome()
     const version = this.coreVersion ?? getActiveVersion()
     const binDir = version ? join(versionDir(version), 'node_modules', '.bin') : null
-    openTerminal({ dshHome, env: buildCoreEnv(dshHome), binDir })
+    const nodeExe = resolveNodeExecutable()
+    const nodeDir = nodeExe ? dirname(nodeExe) : null
+    openTerminal({ dshHome, env: buildCoreEnv(dshHome), binDirs: [binDir, nodeDir] })
   }
 
   async checkUpdate(): Promise<{ current: string | null; latest: string | null; channel: string }> {

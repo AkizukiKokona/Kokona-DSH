@@ -1,30 +1,53 @@
 import { spawn } from 'node:child_process'
 import { existsSync } from 'node:fs'
 import { delimiter } from 'node:path'
+import { createLogger } from './logger'
+
+const log = createLogger('terminal')
 
 export interface TerminalOptions {
   dshHome: string
   env: NodeJS.ProcessEnv
-  binDir?: string | null
+  binDirs?: Array<string | null>
 }
 
-export function openTerminal({ dshHome, env, binDir }: TerminalOptions): void {
+function psQuote(value: string): string {
+  return `'${value.replace(/'/g, "''")}'`
+}
+
+function launch(command: string, args: string[], options: Parameters<typeof spawn>[2]): void {
+  const child = spawn(command, args, options)
+  child.on('error', (error) => log.warn(`spawn ${command} failed: ${error.message}`))
+  child.on('spawn', () => log.info(`spawned ${command} pid=${child.pid ?? '?'}`))
+  child.unref()
+}
+
+export function openTerminal({ dshHome, env, binDirs = [] }: TerminalOptions): void {
   const childEnv: NodeJS.ProcessEnv = { ...env }
-  if (binDir && existsSync(binDir)) {
-    const current = childEnv.PATH ?? childEnv.Path ?? ''
-    const merged = `${binDir}${delimiter}${current}`
+  const current = childEnv.PATH ?? childEnv.Path ?? ''
+  const extra = binDirs.filter((dir): dir is string => typeof dir === 'string' && existsSync(dir))
+  if (extra.length) {
+    const merged = [...extra, current].join(delimiter)
     childEnv.PATH = merged
     childEnv.Path = merged
   }
-  const base = { detached: true, stdio: 'ignore' as const, env: childEnv, cwd: dshHome }
   if (process.platform === 'win32') {
-    spawn('cmd.exe', ['/K', `title KokonaDSH Terminal && cd /d "${dshHome}"`], base).unref()
+    // stdio:'ignore' gives powershell a NUL stdin, so -NoExit still exits at
+    // once and the window never shows. `start` opens a fresh console owned by
+    // the new process, which survives on its own.
+    const command = `$host.UI.RawUI.WindowTitle = 'Kokona DSH Terminal'; Set-Location -LiteralPath ${psQuote(dshHome)}`
+    launch('cmd.exe', ['/c', 'start', 'Kokona DSH Terminal', 'powershell.exe', '-NoLogo', '-NoExit', '-Command', command], {
+      cwd: dshHome,
+      env: childEnv,
+      stdio: 'ignore',
+      windowsHide: false
+    })
     return
   }
+  const base = { detached: true, stdio: 'ignore' as const, env: childEnv, cwd: dshHome }
   if (process.platform === 'darwin') {
-    spawn('open', ['-a', 'Terminal', dshHome], base).unref()
+    launch('open', ['-a', 'Terminal', dshHome], base)
     return
   }
-  const term = process.env.TERMINAL ?? 'x-terminal-emulator'
-  spawn(term, [], base).unref()
+  launch(process.env.TERMINAL ?? 'x-terminal-emulator', [], base)
 }

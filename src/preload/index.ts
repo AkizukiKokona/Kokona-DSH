@@ -158,6 +158,21 @@ function ensureShellStyle(theme?: 'dark' | 'light'): void {
 .${MENU_CLASS} button { text-align: left; border: 0; background: transparent; color: var(--dsw-alias-label-primary, #e8e8ee); font: inherit; font-size: 13px; line-height: 18px; padding: 8px 10px; border-radius: 8px; cursor: pointer; -webkit-app-region: no-drag; }
 .${MENU_CLASS} button:hover { background: var(--dsw-alias-interactive-bg-hover, rgba(255,255,255,0.08)); }
 .${MENU_CLASS} button.kokona-danger { color: var(--dsw-alias-state-warning-primary, #f0a020); }
+html:not([data-theme="dark"]):not(:has(body[data-ds-dark-theme])) { --kokona-surface-soft: rgba(245, 246, 247, 0.72); --kokona-surface-glass: rgba(255, 255, 255, 0.72); --kokona-surface-chip: rgba(250, 250, 250, 0.72); --kokona-surface-selected: rgba(255, 255, 255, 0.95); --kokona-selected-ring: rgba(0, 0, 0, 0.35); }
+html[data-theme="dark"], body[data-ds-dark-theme] { --kokona-surface-soft: rgba(255, 255, 255, 0.07); --kokona-surface-glass: rgba(255, 255, 255, 0.07); --kokona-surface-chip: rgba(255, 255, 255, 0.07); --kokona-surface-selected: rgba(255, 255, 255, 0.16); --kokona-selected-ring: rgba(255, 255, 255, 0.9); }
+html [class*="_panel"]:has([class*="_navList"]) [class*="_rowCard"],
+html [class*="_panel"]:has([class*="_navList"]) [class*="_cards"] > [class*="_card"] { background-color: var(--kokona-surface-glass) !important; }
+html [class*="_panel"]:has([class*="_navList"]) [class*="_selector"],
+html [class*="_panel"]:has([class*="_navList"]) [class*="_themeCube"],
+html [class*="_panel"]:has([class*="_navList"]) [class*="_stepper"],
+html [class*="_panel"]:has([class*="_navList"]) [class*="_switcher"],
+html [class*="_panel"]:has([class*="_navList"]) [class*="_setting"] > [class*="_button"] { background-color: var(--kokona-surface-soft) !important; }
+html [class*="_panel"]:has([class*="_navList"]) [class*="_themeCube"][class*="_selected"],
+html [class*="_panel"]:has([class*="_navList"]) [class*="_themeCube"][aria-pressed="true"] { background-color: var(--kokona-surface-selected) !important; border-color: #ffffff !important; border-width: 2px !important; box-shadow: 0 0 0 1px var(--kokona-selected-ring), 0 6px 18px rgba(0, 0, 0, 0.18) !important; }
+[class*="_newSession"]:not([class*="_newSession"] *) { background-color: var(--kokona-surface-glass) !important; }
+[class*="_presented"] [class*="_file"]:not([class*="_file"] *) { background-color: var(--kokona-surface-chip) !important; }
+[class*="_tools"] [class*="_add"]:not([class*="_add"] *) { background-color: var(--kokona-surface-soft) !important; }
+code:not(pre code) { background-color: var(--kokona-surface-chip) !important; }
 `
   document.head.appendChild(style)
 }

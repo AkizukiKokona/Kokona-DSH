@@ -43,6 +43,24 @@ if (!gotLock) {
     createTray({ show: showMainWindow, quit: quitApp })
     globalShortcut.register('CommandOrControl+Shift+K', () => togglePanelWindow(preloadPath))
     await shell.boot()
+    if (process.env.KOKONA_TERMINAL_TEST) {
+      shell.openTerminal()
+      const { execSync } = await import('node:child_process')
+      const { createLogger } = await import('./logger')
+      const testLog = createLogger('termtest')
+      setTimeout(() => {
+        try {
+          const out = execSync(
+            'powershell -NoProfile -Command "(Get-Process | Where-Object { $_.MainWindowHandle -ne 0 -and $_.MainWindowTitle -eq \'Kokona DSH Terminal\' } | ForEach-Object { $_.ProcessName + \':\' + $_.MainWindowTitle }) -join \' | \'"'
+          )
+            .toString()
+            .trim()
+          testLog.info(out || 'NO WINDOW')
+        } catch (error) {
+          testLog.info(`query failed ${(error as Error).message}`)
+        }
+      }, 3000)
+    }
 
     app.on('activate', () => showMainWindow())
   })

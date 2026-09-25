@@ -151,6 +151,20 @@ async function testSettingsActions(window: BrowserWindow): Promise<void> {
       })
     })()`)) as string
     log.info(`settings structure: ${structure}`)
+    const cubes = (await window.webContents.executeJavaScript(`(() => {
+      const list = Array.from(document.querySelectorAll('[class*="_themeCube"]'))
+      return JSON.stringify(list.map((cube) => {
+        const style = getComputedStyle(cube)
+        return {
+          text: (cube.textContent || '').slice(0, 8),
+          pressed: cube.getAttribute('aria-pressed'),
+          borderWidth: style.borderWidth,
+          borderColor: style.borderColor,
+          bg: style.backgroundColor
+        }
+      }))
+    })()`)) as string
+    log.info(`theme cubes: ${cubes}`)
     const menuClick = (await window.webContents.executeJavaScript(`(() => {
       const actions = document.querySelector('[data-kokona-actions]')
       const buttons = actions ? Array.from(actions.querySelectorAll('button')) : []
@@ -197,6 +211,144 @@ async function testSettingsActions(window: BrowserWindow): Promise<void> {
     log.info(`settings shell update status: ${shellStatus}`)
   } catch (error) {
     log.warn(`settings test failed: ${(error as Error).message}`)
+  }
+}
+
+async function scanSettingsBackgrounds(window: BrowserWindow): Promise<void> {
+  if (!process.env.KOKONA_SETTINGS_SCAN) return
+  try {
+    await window.webContents.executeJavaScript(`(() => {
+      const trigger = document.querySelector('button[class*="_trigger"]') || document.querySelector('[class*="triggerRow"] button')
+      if (trigger) trigger.click()
+    })()`)
+    await new Promise((resolve) => setTimeout(resolve, 1800))
+    const navCount = (await window.webContents.executeJavaScript(`(() => {
+      const panel = document.querySelector('button[class*="_close"]')?.closest('[class*="_panel"]')
+      const list = panel?.querySelector('[class*="_navList"]')
+      return list ? list.children.length : 0
+    })()`)) as number
+    log.info(`settings scan: nav cells=${navCount}`)
+    for (let index = 0; index < navCount; index += 1) {
+      await window.webContents.executeJavaScript(`(() => {
+        const panel = document.querySelector('button[class*="_close"]')?.closest('[class*="_panel"]')
+        const list = panel?.querySelector('[class*="_navList"]')
+        const cell = list?.children[${index}]
+        if (cell) cell.click()
+      })()`)
+      await new Promise((resolve) => setTimeout(resolve, 900))
+      const result = (await window.webContents.executeJavaScript(`(() => {
+          const root = document.querySelector('button[class*="_close"]')?.closest('[class*="_panel"]') || document.body
+          const buckets = new Map()
+          for (const el of root.querySelectorAll('*')) {
+            const r = el.getBoundingClientRect()
+            if (r.width < 24 || r.height < 16) continue
+            const cs = getComputedStyle(el)
+            const bg = cs.backgroundColor
+            if (!bg || bg === 'rgba(0, 0, 0, 0)' || bg === 'transparent') continue
+            let bucket = buckets.get(bg)
+            if (!bucket) {
+              bucket = { bg, count: 0, area: 0, opaque: 0, sample: [] }
+              buckets.set(bg, bucket)
+            }
+            bucket.count += 1
+            bucket.area += r.width * r.height
+            const m = /,\\s*([\\d.]+)\\)$/.exec(bg)
+            const alpha = m ? Number(m[1]) : 1
+            if (alpha >= 0.99) bucket.opaque += 1
+            if (bucket.sample.length < 3) {
+              bucket.sample.push({
+                tag: el.tagName,
+                cls: String(el.className).slice(0, 46),
+                parent: el.parentElement ? String(el.parentElement.className).slice(0, 34) : null,
+                w: Math.round(r.width), h: Math.round(r.height)
+              })
+            }
+          }
+          return JSON.stringify([...buckets.values()].sort((a, b) => b.area - a.area).slice(0, 8))
+        })()`)) as string
+      log.info(`settings palette ${index}: ${result}`)
+    }
+  } catch (error) {
+    log.warn(`settings scan failed: ${(error as Error).message}`)
+  }
+}
+
+async function scanChatSurfaces(window: BrowserWindow): Promise<void> {
+  if (!process.env.KOKONA_CHAT_SCAN) return
+  for (let round = 1; round <= 10 && !window.isDestroyed(); round += 1) {
+    await new Promise((resolve) => setTimeout(resolve, 10000))
+    try {
+      const result = (await window.webContents.executeJavaScript(`(() => {
+      const alphaOf = (value) => {
+        const slash = /\\/\\s*([\\d.]+)\\s*\\)$/.exec(value)
+        if (slash) return Number(slash[1])
+        const comma = /,\\s*([\\d.]+)\\s*\\)$/.exec(value)
+        if (comma) return Number(comma[1])
+        return 1
+      }
+      const buckets = new Map()
+      for (const el of document.body.querySelectorAll('*')) {
+        if (el.closest('#kokona-titlebar') || el.closest('[class*="_panel"]')) continue
+        const r = el.getBoundingClientRect()
+        if (r.width < 8 || r.height < 8) continue
+        if (r.bottom < 0 || r.top > window.innerHeight) continue
+        const cs = getComputedStyle(el)
+        const bg = cs.backgroundColor
+        if (!bg || bg === 'rgba(0, 0, 0, 0)' || bg === 'transparent') continue
+        if (alphaOf(bg) < 0.99) continue
+        let bucket = buckets.get(bg)
+        if (!bucket) {
+          bucket = { bg, count: 0, area: 0, sample: [] }
+          buckets.set(bg, bucket)
+        }
+        bucket.count += 1
+        bucket.area += r.width * r.height
+        if (bucket.sample.length < 6) {
+          bucket.sample.push({
+            tag: el.tagName,
+            cls: String(el.className).slice(0, 50),
+            parent: el.parentElement ? String(el.parentElement.className).slice(0, 38) : null,
+            text: (el.textContent || '').trim().slice(0, 16),
+            x: Math.round(r.x), y: Math.round(r.y), w: Math.round(r.width), h: Math.round(r.height)
+          })
+        }
+      }
+      return JSON.stringify([...buckets.values()].sort((a, b) => b.area - a.area).slice(0, 8))
+    })()`)) as string
+      log.info(`chat palette ${round}: ${result}`)
+      for (const selector of ['[class*="_newSession"]', '[class*="_file"]']) {
+        const subtree = (await window.webContents.executeJavaScript(
+          `(() => {
+            const root = document.querySelector(${JSON.stringify(selector)})
+            if (!root) return 'absent'
+            const rows = []
+            const walk = (el, depth) => {
+              const cs = getComputedStyle(el)
+              const before = getComputedStyle(el, '::before')
+              const after = getComputedStyle(el, '::after')
+              const r = el.getBoundingClientRect()
+              rows.push({
+                depth,
+                tag: el.tagName,
+                cls: String(el.className).slice(0, 40),
+                bg: cs.backgroundColor,
+                bgi: cs.backgroundImage === 'none' ? null : cs.backgroundImage.slice(0, 60),
+                bf: cs.backdropFilter === 'none' ? null : cs.backdropFilter.slice(0, 30),
+                bBefore: before.content === 'none' ? null : before.background.slice(0, 60),
+                bAfter: after.content === 'none' ? null : after.background.slice(0, 60),
+                w: Math.round(r.width), h: Math.round(r.height)
+              })
+              for (const child of el.children) walk(child, depth + 1)
+            }
+            walk(root, 0)
+            return JSON.stringify(rows)
+          })()`
+        )) as string
+        log.info(`subtree ${selector} ${round}: ${subtree}`)
+      }
+    } catch (error) {
+      log.warn(`chat scan failed: ${(error as Error).message}`)
+    }
   }
 }
 
@@ -380,6 +532,8 @@ async function verifyPage(window: BrowserWindow): Promise<void> {
       log.info(`titlebar geometry: ${diagnostic}`)
       await runSelfTest(window)
       await testSettingsActions(window)
+      await scanSettingsBackgrounds(window)
+      void scanChatSurfaces(window)
       startAnalyze(window)
       await dumpOverlays(window)
       await inspectRightPanel(window)
