@@ -1,5 +1,6 @@
 import { contextBridge, ipcRenderer, type IpcRendererEvent } from 'electron'
 import { IPC } from '../shared/constants'
+import { diagLine, installDiagnostics } from './diagnostics'
 import type { KokonaApi, UpdateInfo } from '../shared/api'
 import type { AppConfig, RuntimeSnapshot, ShellUpdateInfo, WindowState } from '../shared/types'
 
@@ -259,6 +260,21 @@ body[data-we-sidebar-glass] [data-sidebar-right-panel][data-sidebar-right-open] 
   --we-sidebar-saturate: var(--we-saturate, 1.8);
   --we-sidebar-sheen: 1;
 }
+/* better-sidebar's bottom dock (the workbench that slides up from the bottom, and
+   holds the terminal / browser / preview panes). Its own fill is
+   background: var(--dsw-alias-bg-layer-1) — an opaque #fff, because the wallpaper
+   plugin only re-tints that token inside the settings dialog — and the plugin tints
+   the surfaces inside it (terminalWrap, browserBar, paneCard) with the 侧栏 sliders,
+   so the bar reads as a solid sheet rather than as the composer's glass. Give the
+   dock the same treatment as the right panel: the composer's veil as its own fill,
+   and the composer's values in the sidebar variables its children consume. */
+body[data-we-sidebar-glass] [class*="_bottomPanel"] {
+  background-color: var(--kokona-surface-glass) !important;
+  --we-sidebar-blur: var(--we-blur, 16px);
+  --we-sidebar-tint: calc(var(--we-glass-alpha, 0.2) * 80%);
+  --we-sidebar-saturate: var(--we-saturate, 1.8);
+  --we-sidebar-sheen: 1;
+}
 `
   document.head.appendChild(style)
 }
@@ -339,6 +355,7 @@ function applyShift(element: HTMLElement, shift: number): void {
   }
   if (state.applied === shift) return
   state.applied = shift
+  diagLine(`shift ${element.getAttribute('class') ?? element.tagName} -> ${shift}px`)
   // '' hands the property back to the shell's own rule; the conversation header
   // corner ships margin-right:-16px, which a flat override used to clobber.
   element.style.marginRight = shift === 0 ? '' : `${state.original + shift}px`
@@ -444,6 +461,11 @@ function installTitlebar(config: AppConfig): void {
           // First sighting of this value. A one-off snapshot — a slot re-mounting,
           // a frame of an animation this pass cannot see — would otherwise move
           // the buttons and move them straight back. Require the same answer twice.
+          diagLine(
+            `layout pending ${wanted}px (was ${applied}px) on ` +
+              `${entry.element.getAttribute('class') ?? entry.element.tagName} ` +
+              `rect=${Math.round(entry.rect.left)},${Math.round(entry.rect.right)} boundary=${Math.round(boundary)}`
+          )
           pendingShift.set(entry.element, wanted)
           needConfirm = true
         }
@@ -1034,6 +1056,7 @@ async function bootstrap(): Promise<void> {
     syncRightPanel()
     new MutationObserver(syncRightPanel).observe(document.documentElement, { childList: true, subtree: true })
     window.setInterval(syncRightPanel, 600)
+    installDiagnostics()
   }
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', start, { once: true })
   else start()

@@ -489,3 +489,51 @@ body { --dsw-alias-markdown-inline-code: var(--kokona-surface-chip) !important; 
 5. `package-lock.json` 的 version 字段从 0.1.0 起就没跟过 `package.json`，`npm ci` 不受影响，别去动它。
 6. `repack.cmd` 是 CRLF 的批处理，而仓库的 `.gitattributes` 是 `* text=auto eol=lf` —— 新加的 `*.cmd/*.bat eol=crlf` 保证 clone 下来是 CRLF（cmd.exe 对纯 LF 的 goto/label 会解析错）。
 
+---
+
+## 16. 1.0.2 进行中（底栏玻璃 + 打开方式菜单抖动）
+
+### 底栏（better-sidebar 的 bottom dock）
+
+`dsh-better-sidebar` 的底部工作台：
+
+```css
+.nArs4W_bottomPanel { background: var(--dsw-alias-bg-layer-1); /* 不透明 #fff */ }
+```
+
+而 wallpaper-engine 只在设置对话框里重映射 `bg-layer-1/2/3`，所以这里是**实心白**；同时插件会把里面的 `_terminalWrap` / `_browserBar` / `_paneCard` 按侧栏滑块刷成 `--we-sidebar-color`（YG 是 `#67DCE7`）—— 合起来就是「青蓝色的实心底」。
+
+处理方式与第 4 节的右侧栏完全一致（复用插件自己的变量，让里面的表面按输入框那套配方走）：
+
+```css
+body[data-we-sidebar-glass] [class*="_bottomPanel"] {
+  background-color: var(--kokona-surface-glass) !important;
+  --we-sidebar-blur: var(--we-blur, 16px);
+  --we-sidebar-tint: calc(var(--we-glass-alpha, 0.2) * 80%);
+  --we-sidebar-saturate: var(--we-saturate, 1.8);
+  --we-sidebar-sheen: 1;
+}
+```
+
+### 「打开方式」下拉菜单的抖动（`dsh-client-ui-open-in-app`）
+
+现象：点右上角的打开方式按钮，菜单弹出来后**在几种高度之间反复伸缩**，一直循环。
+
+已查明的静态事实：
+
+- 组件是 `OpenTargetButton`（前缀 `OMoRSG_`），按钮上有 `data-open-target` / `data-open-path-more` / `data-state`，`aria-haspopup="menu"`。
+- 菜单是 `dsh-client-ui-primitives` 的 `Menu`，`portal: true`、`align: "end"`、`dense: true`，条目 = `applications` 列表（+ `failed` 时追加一条不可用行，文件型还有 `footer` 的「显示位置」）。
+- `Menu.module.css` 里 `.itemLabel` 是 `white-space: nowrap`，所以标签不会换行 —— 菜单变高只可能来自**条目数变化**（`applications` 或 `failed` 抖动），不是文本折行。
+- 菜单是 portal 出去的，不在标题栏留白（`topStripClusters`）会改的节点里，所以**留白代码改不动它的尺寸**（只可能挪锚点）。留白那边本来就有「两次测量一致才写入」的保护。
+
+### 诊断机制（临时，1.0.2 发版前删掉）
+
+shell 没有 DOM 检查器，页面也看不见，所以加了 `src/preload/diagnostics.ts`：**只有存在 `%LOCALAPPDATA%\KokonaDSH\diag.on` 时才启用**，每 300ms 采样一批候选表面（底栏、终端、菜单、portal、item 等）的 `getBoundingClientRect` + `background-color` + `backdrop-filter` + 子节点数，有变化就追加到 `%LOCALAPPDATA%\KokonaDSH\diag.log`；另外每秒扫一遍下半屏里类名像 panel/bottom/dock 的元素。标题栏的 `applyShift` 和 `layout` 的 pending 决策也写进同一个日志。
+
+**发 1.0.2 前必须做**：删掉 `src/preload/diagnostics.ts`、`index.ts` 里的 import 和 `installDiagnostics()` 调用、两处 `diagLine(...)`，以及 `%LOCALAPPDATA%\KokonaDSH\diag.on`。
+
+### 新踩的坑
+
+- **CSS 注释里写反引号会把模板字符串提前结束**。注入样式是一整个 `` `...` `` 模板字面量，注释里写 `` `background: var(...)` `` 直接 `TS1005`。这个坑我踩了两次（第 4 节和第 16 节各一次），写注释时不要用反引号。
+- `pwsh` 里 `Select-String -Path (Join-Path ...)` 遍历 `@deepseek-ai` 下所有包会因为很多包没有 `lib/client.js` 而刷满错误 —— 先 `Test-Path` 或直接列目录。
+
