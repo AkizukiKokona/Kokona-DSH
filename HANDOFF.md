@@ -177,20 +177,34 @@ git remote -v
    gh run list --repo AkizukiKokona/Kokona-DSH --workflow release --limit 2
    gh run watch <run-id> --repo AkizukiKokona/Kokona-DSH --exit-status
    ```
-5. 确认 4 个资产：`KokonaDSH-Setup-1.0.0.exe`、`mac-x64.dmg`、`mac-arm64.dmg`、`linux-x86_64.AppImage`。
-   ```sh
-   gh release view v1.0.0 --repo AkizukiKokona/Kokona-DSH --json assets
+5. 确认 4 个资产（版本号跟着 `package.json` 走）：
    ```
-6. 下载：
-   ```sh
-   gh release download v1.0.0 --repo AkizukiKokona/Kokona-DSH --dir <临时目录> --clobber
+   KokonaDSH-Setup-<version>.exe             # Windows
+   KokonaDSH-<version>-mac-arm64.dmg         # macOS Apple Silicon
+   KokonaDSH-<version>-mac-x64.dmg           # macOS Intel
+   KokonaDSH-<version>-linux-x86_64.AppImage # Linux
    ```
-7. 同步到 Codeberg（先删旧资产，再传 4 个新的）。
+   ```sh
+   gh release view v1.0.1 --repo AkizukiKokona/Kokona-DSH --json assets
+   ```
+6. 下载。**不要用 `gh release download`** —— 它是单流，在直连不稳的线路上会慢到你以为卡死了，而且全程没有任何进度输出。用 4 个 `curl.exe` 并发直连，422 MB 大约 35 秒：
+   ```powershell
+   $base = 'https://github.com/AkizukiKokona/Kokona-DSH/releases/download/v1.0.1'
+   foreach ($f in $files) {
+     Start-Process -NoNewWindow -FilePath curl.exe -ArgumentList @(
+       '-sS','-L','-C','-','--retry','5','--retry-all-errors','-o', "$dir\$f", "$base/$f")
+   }
+   # 然后每隔十几秒比对 $dir 里的文件大小与 release 里的 size，直到逐个相等
+   ```
+   直连慢的备选（本轮实测）：`https://gh-proxy.com/<完整 github url>`（28 MB/s）、`https://ghfast.top/...`，以及本机 Clash 的 `--proxy http://127.0.0.1:7897`（已验证可用）。
+7. 同步到 Codeberg。**发新版本**时 Codeberg 上还没有 release（推 tag 不会自动建 release），先 `POST /releases` 建，再传 4 个资产；**同一版本重发**才是先删旧资产再传。
 
 ### Codeberg API（gitea 1.22，路由别记错）
 
 ```text
 GET    /api/v1/repos/{owner}/{repo}/releases/tags/{tag}            # 查 release 及其 assets
+POST   /api/v1/repos/{owner}/{repo}/releases                       # 建 release（新版本必须先建）
+PATCH  /api/v1/repos/{owner}/{repo}/releases/{release_id}          # 改 release（body 等）
 DELETE /api/v1/repos/{owner}/{repo}/releases/{release_id}/assets/{asset_id}   # 删资产（正确路由！）
 POST   /api/v1/repos/{owner}/{repo}/releases/{release_id}/assets?name=<文件名>  # 传资产
 ```
@@ -204,7 +218,8 @@ POST   /api/v1/repos/{owner}/{repo}/releases/{release_id}/assets?name=<文件名
   ```
 - Codeberg 仓库需要 `has_releases = true`，否则 release 接口 404：
   `PATCH /api/v1/repos/{owner}/{repo}` body `{"has_releases":true}`。
-- 传完对比 GitHub 与 Codeberg 的字节数，逐个匹配才算成功。
+- 传完对比 GitHub 与 Codeberg 的字节数，逐个匹配才算成功。实测上传速度约 5 MB/s，422 MB 约 90 秒。
+- **PowerShell 的 `ConvertTo-Json` 会把字符串包成对象**（`{"body":{"value":"…","Drives":"C D","ReadCount":1}}`），Codeberg 直接 422 `cannot unmarshal object … of type string`。别用它发 body：手工转义（`\` → `\\`、`"` → `\"`、换行 → `\n`）后写成 UTF-8 **无 BOM** 文件，再 `curl.exe --data-binary "@<json文件>"`。
 
 ---
 
@@ -292,9 +307,9 @@ POST   /api/v1/repos/{owner}/{repo}/releases/{release_id}/assets?name=<文件名
 | `repack.cmd`（新增） | 一键打包重启（见第 13 节） |
 | `HANDOFF.md`（新增） | 本文档 |
 
-上一个已提交的 commit 是 `07e90de`（终端 `cmd /c start` 修复等）。本轮改动尚未 commit / push / 打包。
+上一个已提交的 commit 是 `07e90de`（终端 `cmd /c start` 修复等）。本节描述的改动已于 1.0.1 发布（见第 15 节）。
 
-**下一个 AI 要做的事**：`npm run typecheck && npm run build` → 关闭正在运行的 exe → `npm run pack` → 按第 6 节提交、推双远端、重打 tag、等 Actions、下载资产、同步 Codeberg。
+**下一个 AI 要做的事**：`npm run typecheck && npm run build` → 关闭正在运行的 exe → `npm run pack` → 按第 6 节提交、推双远端、打 tag、等 Actions、下载资产、同步 Codeberg。
 
 ---
 
@@ -448,3 +463,27 @@ body { --dsw-alias-markdown-inline-code: var(--kokona-surface-chip) !important; 
 ### 启动页那句
 
 `src/renderer/src/boot.ts` 往 `main.splash` 末尾加了一个 `.splash__blessing`（绝对定位，`top:60%` + `translateX(-50%)`，`--muted` 灰），`main.splash` 因此加了 `position:relative`。位置是「中间偏下但不贴底」：`top` 百分比改一个数就能挪。
+
+---
+
+## 15. 1.0.1 发布记录（2026-09-26）
+
+一次走完第 6 节的流程，记下实际结果和踩到的坑。
+
+| 项 | 值 |
+|---|---|
+| commit | `bd09384` fix: scope the inline-code chip to markdown, glass the remaining white surfaces |
+| tag | `v1.0.1` → `bd09384`，已推 github + codeberg |
+| Actions run | `36170193778`，三平台全绿（mac 2m18s / win 2m15s / linux 1m10s） |
+| GitHub release | 4 个资产，`95217983` / `112082089` / `117105786` / `117416709` 字节 |
+| Codeberg release | id `12457887`，4 个资产字节数与 GitHub **逐个相等** |
+
+本轮新增的规矩：
+
+1. **`gh run watch` 每 3 秒重刷整个 job 状态**，一次 `watch` 能吐几千行。要盯构建就轮询 `gh run list --workflow release --limit 2`，别用 watch。
+2. **`gh release download` 不要用**：单流、无进度输出，看起来就是卡死。改成 4 个并发 `curl.exe`（见第 6 节第 6 步），422 MB 约 35 秒；直连慢就换 `gh-proxy.com` 镜像或本机 `127.0.0.1:7897` 代理。
+3. **任何下载/上传都别写成一条长阻塞命令**。用 `Start-Process` 起独立进程或后台 job，然后隔十几秒比对文件大小，把「X / Y MB」报出来 —— 否则用户分不清是真卡还是在跑。
+4. **新版本在 Codeberg 上要先 `POST /releases` 建 release**（推 tag 不会自动建），拿到 release id 才能传资产；同一版本重发才是「先删资产再传」。
+5. `package-lock.json` 的 version 字段从 0.1.0 起就没跟过 `package.json`，`npm ci` 不受影响，别去动它。
+6. `repack.cmd` 是 CRLF 的批处理，而仓库的 `.gitattributes` 是 `* text=auto eol=lf` —— 新加的 `*.cmd/*.bat eol=crlf` 保证 clone 下来是 CRLF（cmd.exe 对纯 LF 的 goto/label 会解析错）。
+
