@@ -17,7 +17,7 @@ export interface ProfileContext {
   onLine?: (line: string) => void
 }
 
-function profileDir(dshHome: string, profile: string): string {
+export function profileDir(dshHome: string, profile: string): string {
   return join(dshHome, 'profiles', profile)
 }
 

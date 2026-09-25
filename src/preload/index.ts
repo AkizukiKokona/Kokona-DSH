@@ -172,9 +172,181 @@ html [class*="_panel"]:has([class*="_navList"]) [class*="_themeCube"][aria-press
 [class*="_newSession"]:not([class*="_newSession"] *) { background-color: var(--kokona-surface-glass) !important; }
 [class*="_presented"] [class*="_file"]:not([class*="_file"] *) { background-color: var(--kokona-surface-chip) !important; }
 [class*="_tools"] [class*="_add"]:not([class*="_add"] *) { background-color: var(--kokona-surface-soft) !important; }
-code:not(pre code) { background-color: var(--kokona-surface-chip) !important; }
+/* Inline code used to be painted here with a blanket code:not(pre code) chip.
+   That also caught the <code> elements that are *labels* rather than code: the
+   update panel's version strings, the Agent preset card's id, and the turn-error
+   code chip — the SERVER you see in the failed-turn notice is
+   MessageItem.turnErrorCode, a bare <code> with no radius of its own, so the
+   blanket rule dropped a square translucent rectangle into a place that never had
+   one. The shell already styles real inline code (.markdown :not(pre) > code in
+   MarkdownText.module.css, with its own border and radius), so route its token
+   instead and leave every other <code> alone. No per-element exceptions needed. */
+/* 「已编辑 N 个文件」(dsh-client-ui-deliverables ChangedFiles) fills the card with
+   the opaque --dsw-alias-bg-layer-1 and repaints the header with --changes-fill.
+   Paint the card with the same glass as the 产物 rows and let the header show it
+   through instead of adding a second layer. */
+[data-changed-files] { background-color: var(--kokona-surface-glass) !important; --changes-fill: transparent !important; --changes-hover: var(--dsw-alias-interactive-bg-hover, rgba(128, 128, 128, 0.12)) !important; }
+/* Every code surface — markdown code blocks, the edit/diff block, tool IO cards,
+   the skill card — fills with --dsw-alias-markdown-code-block, an opaque
+   near-white in the light theme. Route it to the same chip the 产物 cards use.
+   --dsw-alias-markdown-inline-code is the inline-code counterpart (#fafafa) and is
+   only consumed by markdown content, so remapping it here replaces the deleted
+   blanket rule without touching anything that merely happens to be a <code>. */
+body { --dsw-alias-markdown-code-block: var(--kokona-surface-chip) !important; --dsw-alias-markdown-inline-code: var(--kokona-surface-chip) !important; }
+/* Three components repaint that fill on a nested node: the code card's toolbar
+   header, the code block's sticky banner, and the code block's <pre>. Two 0.72
+   layers stack back into near-white, so drop the inner repaint and let the card
+   underneath show through. */
+[data-code-block-banner],
+[data-code-block-content] pre,
+[class*="_instructionsCard"] > [class*="_instructionsHeader"] { background-color: transparent !important; }
+/* The settings dialog is the one scope the wallpaper plugin re-tints, and it only
+   remaps bg-layer-1/2/3 — --dsw-alias-bg-module-platform stays an opaque #f5f6f7
+   (light) / #2c2c2e (dark). Everything inside the dialog that reads it therefore
+   shows as a flat slab: the Agent preset cards' default and disabled states, the
+   neutral tags, the chat preference rows, the model and permission selectors.
+   Route the token through the same glass the neighbouring surfaces use. */
+html [class*="_panel"]:has([class*="_navList"]) { --dsw-alias-bg-module-platform: var(--kokona-surface-glass); }
+/* A Tag with tone=solid paints --dsw-alias-label-primary (near-black in the light
+   theme) and writes its label in --dsw-alias-bg-layer-3, which the plugin turns
+   translucent — the text all but disappears into the capsule. Use the selected
+   surface and an explicit readable label instead. */
+html [class*="_panel"]:has([class*="_navList"]) [data-tone="solid"] { background-color: var(--kokona-surface-selected) !important; color: var(--dsw-alias-label-primary) !important; border: .5px solid rgba(255, 255, 255, 0.7) !important; }
+/* The Agent preset card marked as the current default (li[data-agent-preset-id])
+   fills with that same opaque token, so it reads as a dark slab while every other
+   card picks up the glass. Mark the choice exactly the way the 深浅色/自动 cubes
+   mark theirs, so the two selectors speak one language. */
+html [data-agent-preset-id][class*="_cardActive"] { background-color: var(--kokona-surface-selected) !important; border-color: #ffffff !important; border-width: 2px !important; box-shadow: 0 0 0 1px var(--kokona-selected-ring), 0 6px 18px rgba(0, 0, 0, 0.18) !important; }
+/* A card the current build cannot select (dev tools off) shares that token but is
+   not a selection — keep it a plain translucent surface. */
+html [data-agent-preset-id][class*="_cardSelectionDisabled"] { background-color: var(--kokona-surface-soft) !important; }
+/* 「加载更早」 (ChatView _older) fills its button with
+   --dsw-alias-interactive-bg-hover-solid, an opaque near-white; it only looks
+   translucent while loading because the disabled state drops to opacity .6. */
+[class*="_older"] > button { background-color: var(--kokona-surface-glass) !important; }
+/* The scroll-to-bottom pill fills with --dsw-alias-button-floating-fill (opaque)
+   and carries no backdrop blur. Same veil as the composer, and blur behind it so
+   the transcript stays legible through the button. */
+button[class*="_toBottom"] { background-color: var(--kokona-surface-glass) !important; backdrop-filter: blur(var(--we-blur, 16px)) saturate(var(--we-saturate, 1.8)); }
+button[class*="_toBottom"]:hover { background-color: var(--kokona-surface-selected) !important; }
+/* TurnTriggerNodeView — the attribution notice above a turn that is not from a
+   human (webhook, goal, subagent, schedule) — is a <section data-turn-trigger>
+   filled with --dsw-alias-markdown-code-block and outlined. NOT the same element as
+   the SERVER chip (that was the turn-error <code> above); this one is a designed
+   disclosure card. It is kept background-free because the chip token turned it into
+   another white block in the transcript — restore the fill here if the card look is
+   wanted back. */
+[data-turn-trigger] { background-color: transparent !important; border-color: transparent !important; }
+/* Everything else in the transcript that still fills with bg-layer-1: the turn
+   preview tooltip, the subagent frame, the deliverables output block. Outside the
+   settings dialog nothing re-tints that token, so they paint pure #fff over the
+   wallpaper. Remap it for the transcript scope only — the settings dialog keeps the
+   plugin's own (more specific) recipe. */
+body[data-we-wallpaper] [data-conversation-scroll] { --dsw-alias-bg-layer-1: var(--kokona-surface-glass); }
+/* The RIGHT column (better-sidebar's data-sidebar-right-panel) has its own
+   wallpaper-engine knob set — 侧栏模糊 / 侧栏透明度 / 侧栏玻璃颜色 — and the live
+   values (172px blur, a 24% tint, saturate 2.83) frost it into a sheet of mica
+   with the wallpaper invisible behind it. YG likes the composer card, so the panel
+   reuses exactly that recipe: the 玻璃 slider's blur radius (--we-blur), the
+   composer's veil alpha (--we-glass-alpha * 0.8, the same number
+   --dsw-specific-input-major is built from), the flat material saturation and the
+   full-strength sheen. The panel's own tint colour stays, so it still reads as the
+   sidebar and not as the composer. Scoped to the right panel on purpose: the left
+   sidebar keeps the 侧栏 sliders. */
+body[data-we-sidebar-glass] [data-sidebar-right-panel][data-sidebar-right-open] {
+  --we-sidebar-blur: var(--we-blur, 16px);
+  --we-sidebar-tint: calc(var(--we-glass-alpha, 0.2) * 80%);
+  --we-sidebar-saturate: var(--we-saturate, 1.8);
+  --we-sidebar-sheen: 1;
+}
 `
   document.head.appendChild(style)
+}
+
+/** Gap kept between a shifted app cluster and the window controls. */
+const SHIFT_GAP = 12
+/** Ceiling on one cluster's shift, so a container that ignores margin-right can never run away. */
+const SHIFT_MAX = 260
+
+interface ShiftState {
+  original: number
+  applied: number
+}
+
+const shiftState = new WeakMap<HTMLElement, ShiftState>()
+const pendingShift = new WeakMap<HTMLElement, number>()
+let shiftedClusters = new Set<HTMLElement>()
+
+/**
+ * True while a CSS transition is running on something that reaches into the top
+ * strip. Sidebars animate their width, so during the animation every rect up
+ * there is a snapshot of the motion rather than the final position.
+ */
+function topStripBusy(height: number): boolean {
+  for (const animation of document.getAnimations()) {
+    if (animation.playState !== 'running') continue
+    if (!(animation instanceof CSSTransition)) continue
+    const target = (animation.effect as KeyframeEffect | null)?.target
+    if (!(target instanceof HTMLElement)) continue
+    const rect = target.getBoundingClientRect()
+    if (rect.bottom > 0 && rect.top < height) return true
+  }
+  return false
+}
+
+/**
+ * Outermost top-strip containers in the right half of the window. Each ancestor
+ * must still sit entirely inside the strip, stay in the right half, stay inside
+ * the window, and stay narrower than half the window — so the walk can never
+ * climb into the conversation header or the whole column.
+ */
+function topStripClusters(height: number, width: number, host: HTMLElement): HTMLElement[] {
+  const found = new Set<HTMLElement>()
+  for (const element of document.querySelectorAll(INTERACTIVE_SELECTOR)) {
+    if (host.contains(element)) continue
+    if (!element.matches('button, a[href], [role="button"]')) continue
+    const rect = element.getBoundingClientRect()
+    if (rect.width <= 0 || rect.height <= 0) continue
+    if (rect.top >= height || rect.bottom <= 0) continue
+    if (rect.left < width * 0.5 || rect.left >= width) continue
+    let cluster = element as HTMLElement
+    let depth = 0
+    for (let parent = cluster.parentElement; parent && depth < 4; parent = parent.parentElement, depth += 1) {
+      const bounds = parent.getBoundingClientRect()
+      if (bounds.width <= 0 || bounds.height <= 0) break
+      if (bounds.width > width * 0.5) break
+      if (bounds.top < 0 || bounds.bottom > height) break
+      if (bounds.left < width * 0.5 || bounds.right > width + 1) break
+      cluster = parent
+    }
+    found.add(cluster)
+  }
+  const list = Array.from(found)
+  return list.filter((target) => !list.some((other) => other !== target && other.contains(target)))
+}
+
+function shiftOf(element: HTMLElement): number {
+  return shiftState.get(element)?.applied ?? 0
+}
+
+/** Move a cluster left by exactly `shift` px, remembering its authored margin. */
+function applyShift(element: HTMLElement, shift: number): void {
+  let state = shiftState.get(element)
+  if (!state) {
+    const current = Number.parseFloat(window.getComputedStyle(element).marginRight)
+    state = { original: Number.isFinite(current) ? current : 0, applied: 0 }
+    shiftState.set(element, state)
+  }
+  if (state.applied === shift) return
+  state.applied = shift
+  // '' hands the property back to the shell's own rule; the conversation header
+  // corner ships margin-right:-16px, which a flat override used to clobber.
+  element.style.marginRight = shift === 0 ? '' : `${state.original + shift}px`
+}
+
+function releaseShifts(): void {
+  for (const element of shiftedClusters) applyShift(element, 0)
+  shiftedClusters = new Set()
 }
 
 function installTitlebar(config: AppConfig): void {
@@ -230,27 +402,62 @@ function installTitlebar(config: AppConfig): void {
       (element) => !host.contains(element)
     )
 
-    const reserve = 3 * 46 + 12
-    const shiftTargets = new Set<HTMLElement>()
-    for (const element of appElements) {
-      if (!element.matches('button, a[href], [role="button"]')) continue
-      const rect = element.getBoundingClientRect()
-      if (rect.width <= 0 || rect.height <= 0) continue
-      if (rect.top >= height || rect.bottom <= 0) continue
-      if (rect.left < width * 0.5) continue
-      if (rect.left >= width) continue
-      const cluster = element.closest('[class*="_headerUtilities"], [class*="_headerCorner"]')
-      shiftTargets.add(cluster instanceof HTMLElement ? cluster : (element as HTMLElement))
-    }
-    const targets = Array.from(shiftTargets).filter(
-      (target) => !Array.from(shiftTargets).some((other) => other !== target && other.contains(target))
-    )
-    for (const target of targets) target.style.marginRight = `${reserve}px`
-
     controls.style.paddingRight = `${config.titlebar.insetRight}px`
 
-    const blocked: Rect[] = []
+    // Reserve room for the window controls by shifting only the top-strip
+    // clusters that actually reach into them, right-most first, each by exactly
+    // its own overlap. The old code gave every cluster a flat 3*46+12 margin, so
+    // the utilities and the header corner each moved 150px and any stray button
+    // added another — that stacking, plus the margins it never gave back, is the
+    // drift.
     const controlsRect = controls.getBoundingClientRect()
+    if (controlsRect.width <= 0) {
+      releaseShifts()
+    } else if (topStripBusy(height)) {
+      // A sidebar is animating. Measuring now would apply a shift the next pass
+      // has to take back — the buttons visibly jump out and return. Hold the
+      // current shift and look again once the motion stops.
+      if (retries < 40) {
+        retries += 1
+        scheduleRetry()
+      }
+    } else {
+      retries = 0
+      const ordered = topStripClusters(height, width, host)
+        .map((element) => ({ element, rect: element.getBoundingClientRect() }))
+        .sort((a, b) => b.rect.right - a.rect.right)
+      let boundary = controlsRect.left - SHIFT_GAP
+      let needConfirm = false
+      for (const entry of ordered) {
+        const applied = shiftOf(entry.element)
+        const naturalRight = entry.rect.right + applied
+        const naturalLeft = entry.rect.left + applied
+        const wanted = Math.min(SHIFT_MAX, Math.max(0, Math.round(naturalRight - boundary)))
+        let effective = applied
+        if (wanted === applied) {
+          pendingShift.delete(entry.element)
+        } else if (pendingShift.get(entry.element) === wanted) {
+          applyShift(entry.element, wanted)
+          pendingShift.delete(entry.element)
+          effective = wanted
+        } else {
+          // First sighting of this value. A one-off snapshot — a slot re-mounting,
+          // a frame of an animation this pass cannot see — would otherwise move
+          // the buttons and move them straight back. Require the same answer twice.
+          pendingShift.set(entry.element, wanted)
+          needConfirm = true
+        }
+        boundary = naturalLeft - effective - SHIFT_GAP
+      }
+      const live = new Set(ordered.map((entry) => entry.element))
+      for (const element of shiftedClusters) {
+        if (!live.has(element)) applyShift(element, 0)
+      }
+      shiftedClusters = live
+      if (needConfirm) scheduleRetry()
+    }
+
+    const blocked: Rect[] = []
     if (controlsRect.width > 0) blocked.push({ left: controlsRect.left, right: controlsRect.right })
     for (const element of appElements) {
       const rect = element.getBoundingClientRect()
@@ -296,9 +503,43 @@ function installTitlebar(config: AppConfig): void {
     }, 200)
   }
 
+  // Re-measure soon after a pass that could not settle (busy strip, or a shift
+  // waiting for its second sighting). Single-flight so overlapping passes cannot
+  // stack timers.
+  let retryTimer = 0
+  const scheduleRetry = () => {
+    if (retryTimer) return
+    retryTimer = window.setTimeout(() => {
+      retryTimer = 0
+      layout()
+    }, 140)
+  }
+  let retries = 0
+
   layout()
   window.addEventListener('resize', schedule)
-  new MutationObserver(schedule).observe(document.documentElement, { childList: true, subtree: true })
+  // Attribute changes matter as much as childList ones: toggling a sidebar flips
+  // a class / data attribute and animates the width, which moves every top-strip
+  // rect without adding or removing a single node. Watching childList alone
+  // missed that, so the reserved margin stayed stale and the buttons sat shifted.
+  // Our own margin writes are filtered out so a pass cannot re-trigger itself.
+  new MutationObserver((records) => {
+    let relevant = false
+    for (const record of records) {
+      if (host.contains(record.target)) continue
+      if (record.type === 'attributes' && record.target instanceof HTMLElement) {
+        if (record.attributeName === 'style' && shiftedClusters.has(record.target)) continue
+      }
+      relevant = true
+      break
+    }
+    if (relevant) schedule()
+  }).observe(document.documentElement, {
+    childList: true,
+    subtree: true,
+    attributes: true,
+    attributeFilter: ['class', 'style', 'data-sidebar-right-open', 'data-sidebar-right-panel', 'data-dsh-better-sidebar', 'data-we-sidebar-glass', 'data-we-wallpaper']
+  })
   const stop = window.setInterval(layout, 1500)
   window.setTimeout(() => window.clearInterval(stop), 15000)
 }
@@ -416,10 +657,16 @@ const NAV_BOUND_ATTR = 'data-kokona-nav-bound'
 
 let updatePanel: HTMLElement | null = null
 
+let cachedSettingsRoot: HTMLElement | null = null
+
 function settingsRoot(): HTMLElement | null {
+  const cached = cachedSettingsRoot
+  if (cached && cached.isConnected && cached.querySelector('[class*="_navList"]')) return cached
   const close = document.querySelector('button[class*="_close"]')
   const panel = close?.closest('[class*="_panel"]')
-  return panel instanceof HTMLElement ? panel : null
+  cachedSettingsRoot =
+    panel instanceof HTMLElement && panel.querySelector('[class*="_navList"]') ? panel : null
+  return cachedSettingsRoot
 }
 
 function actionButton(label: string): HTMLButtonElement {
@@ -456,7 +703,7 @@ function buildUpdatePanel(): HTMLElement {
   const wrap = document.createElement('div')
   wrap.setAttribute(UPDATE_PANEL_ATTR, 'true')
   wrap.style.cssText =
-    'position:absolute;inset:0;overflow:auto;padding:8px 24px 24px;background:var(--dsw-alias-bg-layer-2,#17171d);color:var(--dsw-alias-label-primary,#e8e8ee);'
+    'width:100%;box-sizing:border-box;padding:8px 24px 24px;background:transparent;color:var(--dsw-alias-label-primary,#e8e8ee);'
   const heading = document.createElement('h2')
   heading.textContent = '检查更新'
   heading.style.cssText = 'font-size:16px;font-weight:600;margin:0 0 4px;'
@@ -487,7 +734,7 @@ function buildUpdatePanel(): HTMLElement {
   const shellStatus = statusLine()
   const notes = document.createElement('pre')
   notes.style.cssText =
-    'display:none;margin:12px 0 0;max-height:220px;overflow:auto;background:#0b0b10;border:1px solid var(--dsw-alias-border-l2,rgba(128,128,128,.3));border-radius:8px;padding:10px;font-size:11px;line-height:1.5;white-space:pre-wrap;word-break:break-word;'
+    'display:none;margin:12px 0 0;max-height:220px;overflow:auto;background:transparent;color:var(--dsw-alias-label-primary,inherit);border:1px solid var(--dsw-alias-border-l2,rgba(128,128,128,.3));border-radius:8px;padding:10px;font-size:11px;line-height:1.5;white-space:pre-wrap;word-break:break-word;'
   wrap.append(shellTitle, shellRow, shellStatus, notes)
 
   const refreshCore = async (): Promise<void> => {
@@ -595,21 +842,91 @@ function buildUpdatePanel(): HTMLElement {
   return wrap
 }
 
+const HIDDEN_ATTR = 'data-kokona-options-hidden'
+let previousActiveNav: { cell: HTMLElement; token: string } | null = null
+
+function optionsContainer(): HTMLElement | null {
+  const root = settingsRoot()
+  const options = root?.querySelector('[class*="_options"]')
+  return options instanceof HTMLElement ? options : null
+}
+
+function hideOptionsChildren(options: HTMLElement): void {
+  for (const child of Array.from(options.children)) {
+    if (!(child instanceof HTMLElement)) continue
+    if (child.hasAttribute(UPDATE_PANEL_ATTR) || child.hasAttribute(HIDDEN_ATTR)) continue
+    child.setAttribute(HIDDEN_ATTR, child.style.display)
+    child.style.display = 'none'
+  }
+}
+
+function restoreOptionsChildren(options: HTMLElement): void {
+  for (const child of Array.from(options.children)) {
+    if (!(child instanceof HTMLElement) || !child.hasAttribute(HIDDEN_ATTR)) continue
+    child.style.display = child.getAttribute(HIDDEN_ATTR) ?? ''
+    child.removeAttribute(HIDDEN_ATTR)
+  }
+}
+
+function activeNavToken(navList: HTMLElement): string | null {
+  for (const cell of Array.from(navList.querySelectorAll('[class*="_navCell"]'))) {
+    if (cell.hasAttribute(UPDATE_NAV_ATTR)) continue
+    for (const token of Array.from(cell.classList)) {
+      if (/active/i.test(token)) return token
+    }
+  }
+  return null
+}
+
+function setOurNavActive(active: boolean): void {
+  const cell = document.querySelector(`[${UPDATE_NAV_ATTR}]`)
+  if (!(cell instanceof HTMLElement)) return
+  const navList = cell.parentElement
+  if (!(navList instanceof HTMLElement)) return
+  if (active) {
+    const token = activeNavToken(navList)
+    if (token) {
+      for (const other of Array.from(navList.querySelectorAll('[class*="_navCell"]'))) {
+        if (other === cell || !(other instanceof HTMLElement) || !other.classList.contains(token)) continue
+        other.classList.remove(token)
+        other.removeAttribute('aria-current')
+        previousActiveNav = { cell: other, token }
+      }
+      cell.classList.add(token)
+    }
+    cell.setAttribute('aria-current', 'page')
+    return
+  }
+  for (const token of Array.from(cell.classList)) {
+    if (/active/i.test(token)) cell.classList.remove(token)
+  }
+  cell.removeAttribute('aria-current')
+  if (previousActiveNav && document.contains(previousActiveNav.cell)) {
+    previousActiveNav.cell.classList.add(previousActiveNav.token)
+    previousActiveNav.cell.setAttribute('aria-current', 'page')
+  }
+  previousActiveNav = null
+}
+
 function closeUpdateTab(): void {
-  updatePanel?.remove()
-  updatePanel = null
+  if (updatePanel) {
+    updatePanel.remove()
+    updatePanel = null
+    const options = optionsContainer()
+    if (options) restoreOptionsChildren(options)
+    setOurNavActive(false)
+  }
 }
 
 function openUpdateTab(): void {
   if (updatePanel && !document.contains(updatePanel)) updatePanel = null
   if (updatePanel) return
-  const root = settingsRoot()
-  if (!root) return
-  const options = root.querySelector('[class*="_options"]')
-  if (!(options instanceof HTMLElement)) return
-  options.style.position = 'relative'
+  const options = optionsContainer()
+  if (!options) return
+  hideOptionsChildren(options)
   updatePanel = buildUpdatePanel()
   options.appendChild(updatePanel)
+  setOurNavActive(true)
 }
 
 function injectSettingsTabs(): void {
@@ -651,18 +968,47 @@ function injectSettingsTabs(): void {
 }
 
 function observeSettings(): void {
-  let scheduled = 0
-  const run = () => {
-    if (scheduled) return
-    scheduled = window.setTimeout(() => {
-      scheduled = 0
-      injectSettingsActions()
-      injectSettingsTabs()
-    }, 250)
+  let frame = 0
+  const run = (): void => {
+    frame = 0
+    injectSettingsActions()
+    injectSettingsTabs()
   }
-  injectSettingsActions()
-  injectSettingsTabs()
-  new MutationObserver(run).observe(document.body, { childList: true, subtree: true })
+  const schedule = (): void => {
+    if (frame) return
+    frame = window.requestAnimationFrame(run)
+  }
+
+  run()
+
+  // The settings dialog is portalled onto <body>, so its mount is a body-level
+  // childList change. Scheduling on the next animation frame lands the injected
+  // cell in the SAME paint as the shell's own nav cells; the old trailing
+  // 250ms debounce made it appear one step late.
+  new MutationObserver((records) => {
+    for (const record of records) {
+      for (const node of Array.from(record.addedNodes)) {
+        if (!(node instanceof HTMLElement)) continue
+        if (!node.matches('[role="dialog"]') && !node.querySelector('[role="dialog"]')) continue
+        schedule()
+        return
+      }
+    }
+  }).observe(document.body, { childList: true })
+
+  // While the dialog is mounted, React may re-render the nav list and drop the
+  // injected cell, so re-check. Guarded by the cached root: with the dialog
+  // closed this callback is one property read, never a document scan.
+  new MutationObserver(() => {
+    if (cachedSettingsRoot?.isConnected) schedule()
+  }).observe(document.body, { childList: true, subtree: true })
+
+  // Safety net for any mount path the observers miss.
+  window.setInterval(() => {
+    if (cachedSettingsRoot?.isConnected) return
+    injectSettingsActions()
+    injectSettingsTabs()
+  }, 1200)
 }
 
 function syncRightPanel(): void {

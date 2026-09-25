@@ -87,12 +87,16 @@ export class CoreProcess {
     }
     child.stdout?.on('data', consume)
     child.stderr?.on('data', consume)
+    // A superseded child keeps emitting; ignore it so a restart cannot abort
+    // the new attempt through the shared `exited` flag.
     child.on('exit', (code) => {
+      if (this.child !== child) return
       this.exited = true
       log.warn(`core exited with code ${code}`)
       options.onExit?.(code)
     })
     child.on('error', (error) => {
+      if (this.child !== child) return
       this.exited = true
       log.error(`core spawn error: ${error.message}`)
     })
@@ -122,12 +126,26 @@ export class CoreProcess {
     if (!child || child.exitCode !== null) return
     const pid = child.pid
     if (!pid) return
+    // Wait for the process to actually go away so its port and profile locks
+    // are released before the next start.
+    const exited = new Promise<void>((resolve) => {
+      if (child.exitCode !== null) return resolve()
+      child.once('exit', () => resolve())
+      setTimeout(resolve, 5000)
+    })
     if (process.platform === 'win32') {
       await exec('taskkill', ['/pid', String(pid), '/T', '/F'], { windowsHide: true }).catch(() => undefined)
     } else {
       child.kill('SIGTERM')
-      await new Promise((resolve) => setTimeout(resolve, 400))
-      if (child.exitCode === null) child.kill('SIGKILL')
+    }
+    await exited
+    if (child.exitCode === null) {
+      try {
+        child.kill('SIGKILL')
+      } catch {
+        // already gone
+      }
+      await exited
     }
   }
 }

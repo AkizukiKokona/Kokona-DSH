@@ -117,7 +117,9 @@ function renderBoot(): void {
   const logs = el('pre', 'logs', '')
   details.append(kv, el('h2', undefined, '内核日志'), logs)
 
-  main.append(center, details)
+  const blessing = el('div', 'splash__blessing', '沐浴晨光 方得救赎')
+
+  main.append(center, details, blessing)
   root.append(main)
 
   const refreshLogs = async (): Promise<void> => {

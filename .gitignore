@@ -11,3 +11,6 @@ resources/runtime-baseline/
 
 # local auth helpers, not part of the app
 scripts/*-login.*
+
+# local convenience shortcut
+*.lnk

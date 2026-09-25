@@ -214,10 +214,64 @@ async function testSettingsActions(window: BrowserWindow): Promise<void> {
   }
 }
 
-async function scanSettingsBackgrounds(window: BrowserWindow): Promise<void> {
-  if (!process.env.KOKONA_SETTINGS_SCAN) return
+async function testUpdateTab(window: BrowserWindow): Promise<void> {
+  if (!process.env.KOKONA_UPDATE_TAB_TEST) return
   try {
     await window.webContents.executeJavaScript(`(() => {
+      const trigger = document.querySelector('button[class*="_trigger"]') || document.querySelector('[class*="triggerRow"] button')
+      trigger?.click()
+    })()`)
+    await new Promise((resolve) => setTimeout(resolve, 1800))
+    const opened = (await window.webContents.executeJavaScript(`(() => {
+      const nav = document.querySelector('[data-kokona-update-nav]')
+      if (!nav) return JSON.stringify({ nav: false })
+      nav.click()
+      return JSON.stringify({ nav: true })
+    })()`)) as string
+    await new Promise((resolve) => setTimeout(resolve, 500))
+    const state = (await window.webContents.executeJavaScript(`(() => {
+      const panel = document.querySelector('[data-kokona-update-panel]')
+      const nav = document.querySelector('[data-kokona-update-nav]')
+      const close = document.querySelector('button[class*="_close"]')
+      const root = close ? close.closest('[class*="_panel"]') : null
+      const options = root ? root.querySelector('[class*="_options"]') : null
+      const hidden = options ? Array.from(options.children).filter((c) => c.hasAttribute('data-kokona-options-hidden')).length : -1
+      const visible = options ? Array.from(options.children).filter((c) => !c.hasAttribute('data-kokona-update-panel') && getComputedStyle(c).display !== 'none').length : -1
+      const style = panel ? getComputedStyle(panel) : null
+      return JSON.stringify({
+        panel: Boolean(panel),
+        position: style ? style.position : null,
+        hidden,
+        visible,
+        active: nav ? Array.from(nav.classList).filter((t) => /active/i.test(t)) : [],
+        ariaCurrent: nav ? nav.getAttribute('aria-current') : null
+      })
+    })()`)) as string
+    log.info(`update tab open: ${opened} -> ${state}`)
+    const closed = (await window.webContents.executeJavaScript(`(() => {
+      const other = Array.from(document.querySelectorAll('[class*="_navCell"]')).find((c) => !c.hasAttribute('data-kokona-update-nav'))
+      if (!other) return 'no-other-cell'
+      other.click()
+      return 'clicked-other'
+    })()`)) as string
+    await new Promise((resolve) => setTimeout(resolve, 500))
+    const after = (await window.webContents.executeJavaScript(`(() => {
+      const panel = document.querySelector('[data-kokona-update-panel]')
+      const close = document.querySelector('button[class*="_close"]')
+      const root = close ? close.closest('[class*="_panel"]') : null
+      const options = root ? root.querySelector('[class*="_options"]') : null
+      const hidden = options ? Array.from(options.children).filter((c) => c.hasAttribute('data-kokona-options-hidden')).length : -1
+      return JSON.stringify({ panel: Boolean(panel), hidden })
+    })()`)) as string
+    log.info(`update tab close: ${closed} -> ${after}`)
+  } catch (error) {
+    log.warn(`update tab test failed: ${(error as Error).message}`)
+  }
+}
+
+async function scanSettingsBackgrounds(window: BrowserWindow): Promise<void> {
+  if (!process.env.KOKONA_SETTINGS_SCAN) return
+  try {    await window.webContents.executeJavaScript(`(() => {
       const trigger = document.querySelector('button[class*="_trigger"]') || document.querySelector('[class*="triggerRow"] button')
       if (trigger) trigger.click()
     })()`)
@@ -532,6 +586,7 @@ async function verifyPage(window: BrowserWindow): Promise<void> {
       log.info(`titlebar geometry: ${diagnostic}`)
       await runSelfTest(window)
       await testSettingsActions(window)
+      await testUpdateTab(window)
       await scanSettingsBackgrounds(window)
       void scanChatSurfaces(window)
       startAnalyze(window)

@@ -4,7 +4,8 @@ import { IPC, SAFE_PROFILE_SUFFIX } from '../shared/constants'
 import type { BootPhase, RuntimeSnapshot } from '../shared/types'
 import { loadConfig, patchConfig } from './config'
 import { buildCoreEnv } from './core/env'
-import { ensureProfile } from './core/profile'
+import { ensureProfile, profileDir } from './core/profile'
+import { detectPluginFailureIn, disablePlugin } from './core/recovery'
 import { CoreProcess, findFreePort } from './core/process'
 import { createLogger } from './logger'
 import { resolveNodeExecutable } from './node'
@@ -27,6 +28,9 @@ export class Shell {
   private notice: string | null = null
   private readonly logLines: string[] = []
   private starting = false
+  private attemptStart = 0
+  private recoveryTestFired = false
+  private readonly autoDisabled: string[] = []
 
   snapshot(): RuntimeSnapshot {
     const config = loadConfig()
@@ -79,11 +83,61 @@ export class Shell {
   }
 
   async boot(): Promise<boolean> {
+    // No loop: one start, then at most one plugin-disable retry and one
+    // safe-mode retry. A healthy boot costs a single start plus a cheap scan
+    // of the lines it just produced, and never touches a working plugin.
+    let ok = await this.bootOnce()
+    let failure = this.detectAttemptFailure()
+    if (ok && !failure) return true
+
+    if (failure && !this.autoDisabled.includes(failure.id)) {
+      this.autoDisabled.push(failure.id)
+      log.warn(`plugin "${failure.id}" (${failure.name}) failed to activate: ${failure.detail}`)
+      this.logLine(`auto-disable plugin ${failure.id}: ${failure.detail}`)
+      this.notice = `插件「${failure.name}」启动异常，已自动禁用它并重新启动`
+      this.broadcast()
+      disablePlugin(this.profilePath(), failure.id)
+      ok = await this.bootOnce()
+      failure = this.detectAttemptFailure()
+      if (ok && !failure) return true
+    }
+
+    if (!this.safeMode) {
+      patchConfig({ safeMode: true })
+      this.safeMode = true
+      this.notice = '启动仍然失败，已进入安全模式（禁用全部插件）'
+      this.logLine('boot failed without a recoverable plugin; entering safe mode')
+      this.broadcast()
+      ok = await this.bootOnce()
+      failure = this.detectAttemptFailure()
+      if (ok && !failure) return true
+    }
+
+    showBootScreen()
+    return false
+  }
+
+  private detectAttemptFailure() {
+    return detectPluginFailureIn(this.profilePath(), this.logLines.slice(this.attemptStart))
+  }
+
+  private profilePath(): string {
+    const config = loadConfig()
+    return profileDir(config.dshHome ?? defaultDshHome(), this.activeProfile())
+  }
+
+  private async bootOnce(): Promise<boolean> {
     if (this.starting) return false
     this.starting = true
     this.error = null
     this.safeMode = loadConfig().safeMode === true
+    this.attemptStart = this.logLines.length
     try {
+      if (process.env.KOKONA_RECOVERY_TEST && !this.recoveryTestFired) {
+        this.recoveryTestFired = true
+        this.logLine('kokona-recovery-selftest (dsh-kokona-selftest): Error: simulated plugin crash')
+        throw new Error('simulated boot failure (KOKONA_RECOVERY_TEST)')
+      }
       const config = loadConfig()
       const dshHome = config.dshHome ?? defaultDshHome()
 
