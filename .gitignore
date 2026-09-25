@@ -14,3 +14,6 @@ scripts/*-login.*
 
 # local convenience shortcut
 *.lnk
+
+# working files for the custom brand mark (intermediate renders, scratch art)
+brand-work/
