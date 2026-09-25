@@ -49,6 +49,12 @@ Injected into the DSH web page (never by patching the core):
   so no plugins load. It is the same mechanism the CLI documents as
   `dsh --profile rescue --from-default-profile web`.
 - **Plugin market.** `dshmarket` ("DSH 可视化插件市场") is installed as a preset plugin.
+- **Hides the leftover right-panel when the right sidebar is closed.** DSH keeps
+  `[data-sidebar-right-panel]` mounted and visible after the right column collapses
+  (`position:absolute`, anchored right against a 0-width `_rightbarCol`, `pointer-events:none`).
+  Wallpaper-style plugins paint sidebar glass on it without checking the open state, leaving a
+  translucent blur over the right half. KokonaDSH sets `display:none` on that panel while
+  `_rightbarCol` has zero width, and restores it when expanded.
 
 The window title is forced to `Kokona DSH` (`page-title-updated` is prevented), so the DSH page's own
 document title never renames the window.

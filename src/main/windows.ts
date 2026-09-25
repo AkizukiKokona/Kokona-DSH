@@ -200,26 +200,152 @@ async function testSettingsActions(window: BrowserWindow): Promise<void> {
   }
 }
 
-async function testSidebar(window: BrowserWindow): Promise<void> {
-  if (!process.env.KOKONA_SIDEBAR_TEST) return
+function startAnalyze(window: BrowserWindow): void {
+  if (!process.env.KOKONA_ANALYZE) return
+  let count = 0
+  const timer = setInterval(() => {
+    count += 1
+    if (count > 18 || window.isDestroyed()) {
+      clearInterval(timer)
+      return
+    }
+    void window.webContents
+      .capturePage()
+      .then((image) => {
+        const size = image.getSize()
+        if (!size.width || !size.height) return
+        const buffer = image.toBitmap()
+        const lum = (x: number, y: number): number => {
+          const i = (y * size.width + x) * 4
+          return 0.114 * buffer[i] + 0.587 * buffer[i + 1] + 0.299 * buffer[i + 2]
+        }
+        const sharp = (x0: number, y0: number, x1: number, y1: number): number => {
+          let sum = 0
+          let n = 0
+          for (let y = y0 + 1; y < y1; y += 3) {
+            for (let x = x0 + 1; x < x1; x += 3) {
+              sum += Math.abs(lum(x, y) - lum(x - 1, y)) + Math.abs(lum(x, y) - lum(x, y - 1))
+              n += 1
+            }
+          }
+          return n ? Math.round((sum / n) * 10) / 10 : 0
+        }
+        const w = size.width
+        const h = size.height
+        const half = Math.floor(w / 2)
+        const mid = Math.floor(h / 2)
+        log.info(
+          `analyze ${count}: L=${sharp(0, 0, half, h)} R=${sharp(half, 0, w, h)} T=${sharp(0, 0, w, mid)} B=${sharp(0, mid, w, h)}`
+        )
+      })
+      .catch(() => undefined)
+  }, 8000)
+}
+
+async function dumpOverlays(window: BrowserWindow): Promise<void> {
+  if (!process.env.KOKONA_DOM) return
+  await new Promise((resolve) => setTimeout(resolve, 12000))
   try {
-    const dump = () => window.webContents.executeJavaScript(DIAGNOSTIC) as Promise<string>
-    const toggle = `(() => {
-      const candidates = ['button[class*="_toggleButton"]', 'button[class*="_sidebar"]', 'button[aria-label*="sidebar" i]', 'button[aria-label*="侧" i]']
-      for (const selector of candidates) {
-        const node = document.querySelector(selector)
-        if (node) { node.click(); return selector }
+    const result = (await window.webContents.executeJavaScript(`(() => {
+      const vw = window.innerWidth
+      const vh = window.innerHeight
+      const body = {}
+      for (const a of ['data-dsh-sidebar-collapsed', 'data-we-wallpaper', 'data-we-appwindow', 'data-ds-dark-theme']) {
+        body[a] = document.body.getAttribute(a)
       }
-      return 'no-toggle'
-    })()`
-    log.info(`sidebar closed: ${await dump()}`)
-    const clicked = (await window.webContents.executeJavaScript(toggle)) as string
-    log.info(`sidebar toggle: ${clicked}`)
-    await new Promise((resolve) => setTimeout(resolve, 1400))
-    log.info(`sidebar open: ${await dump()}`)
-    await window.webContents.executeJavaScript(toggle)
+      const large = []
+      for (const el of document.querySelectorAll('*')) {
+        const r = el.getBoundingClientRect()
+        const area = r.width * r.height
+        if (area < vw * vh * 0.06 || r.width < 60 || r.height < 60) continue
+        const cs = getComputedStyle(el)
+        const bf = cs.backdropFilter || cs.webkitBackdropFilter
+        const hasBlur = bf && bf !== 'none'
+        if (!hasBlur) continue
+        large.push({
+          tag: el.tagName,
+          cls: String(el.className).slice(0, 80),
+          x: Math.round(r.x), y: Math.round(r.y), w: Math.round(r.width), h: Math.round(r.height),
+          bf: bf.slice(0, 50), bg: cs.backgroundColor, op: cs.opacity
+        })
+      }
+      return JSON.stringify({ vw, vh, body, large: large.slice(0, 25) })
+    })()`)) as string
+    log.info(`overlays: ${result}`)
   } catch (error) {
-    log.warn(`sidebar test failed: ${(error as Error).message}`)
+    log.warn(`overlay dump failed: ${(error as Error).message}`)
+  }
+}
+
+async function inspectRightPanel(window: BrowserWindow): Promise<void> {
+  if (!process.env.KOKONA_RIGHTPANEL) return
+  try {
+    const data = (await window.webContents.executeJavaScript(`(() => {
+      const panel = document.querySelector('[data-sidebar-right-panel]')
+      const panelInfo = panel
+        ? (() => {
+            const r = panel.getBoundingClientRect()
+            return {
+              mode: panel.getAttribute('data-sidebar-right-panel'),
+              inlineTransform: panel.style.transform || null,
+              computedTransform: getComputedStyle(panel).transform,
+              x: Math.round(r.x), w: Math.round(r.width), h: Math.round(r.height)
+            }
+          })()
+        : null
+      const chain = []
+      let node = panel
+      while (node && node !== document.body && chain.length < 8) {
+        const r = node.getBoundingClientRect()
+        const cs = getComputedStyle(node)
+        chain.push({
+          tag: node.tagName,
+          cls: String(node.className).slice(0, 40),
+          x: Math.round(r.x), w: Math.round(r.width),
+          inline: node.style.transform || null,
+          computed: cs.transform === 'none' ? null : cs.transform.slice(0, 50),
+          pos: cs.position
+        })
+        node = node.parentElement
+      }
+      const transforms = []
+      for (const el of document.querySelectorAll('*')) {
+        const cs = getComputedStyle(el)
+        if (cs.transform === 'none') continue
+        const r = el.getBoundingClientRect()
+        if (r.width < 120 || r.height < 120) continue
+        transforms.push({
+          cls: String(el.className).slice(0, 46),
+          inline: el.style.transform || null,
+          computed: cs.transform.slice(0, 46),
+          x: Math.round(r.x), y: Math.round(r.y), w: Math.round(r.width), h: Math.round(r.height)
+        })
+        if (transforms.length >= 20) break
+      }
+      return JSON.stringify({ panelInfo, chain, transforms })
+    })()`)) as string
+    log.info(`panel debug: ${data}`)
+    const styles = (await window.webContents.executeJavaScript(`(() => {
+      const pick = (el, keys) => {
+        if (!el) return null
+        const cs = getComputedStyle(el)
+        const r = el.getBoundingClientRect()
+        const out = { x: Math.round(r.x), w: Math.round(r.width) }
+        for (const k of keys) out[k] = cs[k]
+        return out
+      }
+      const panel = document.querySelector('[data-sidebar-right-panel]')
+      const col = document.querySelector('[class*="_rightbarCol"]')
+      const frame = document.querySelector('[class*="_frame"]')
+      return JSON.stringify({
+        panel: pick(panel, ['display', 'visibility', 'opacity', 'overflow', 'pointerEvents', 'zIndex', 'clipPath']),
+        col: pick(col, ['overflow', 'overflowX', 'overflowY', 'display', 'visibility', 'clipPath']),
+        frame: pick(frame, ['overflow', 'display'])
+      })
+    })()`)) as string
+    log.info(`panel styles: ${styles}`)
+  } catch (error) {
+    log.warn(`right panel inspect failed: ${(error as Error).message}`)
   }
 }
 
@@ -254,7 +380,9 @@ async function verifyPage(window: BrowserWindow): Promise<void> {
       log.info(`titlebar geometry: ${diagnostic}`)
       await runSelfTest(window)
       await testSettingsActions(window)
-      await testSidebar(window)
+      startAnalyze(window)
+      await dumpOverlays(window)
+      await inspectRightPanel(window)
     }
   } catch (error) {
     log.warn(`page check failed: ${(error as Error).message}`)

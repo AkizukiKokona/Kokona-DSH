@@ -36,6 +36,7 @@ DSH 内核（@deepseek-ai/dsh）  <- 按版本装到 <userData>/runtime/<version
   - **外壳更新**（下）：检查 KokonaDSH 本身是否有新发行版。国内优先 Codeberg，国外优先 GitHub（`updateSource` 可强制）；只检查发行版，有更新时给一个"打开发行页"按钮。
 - **安全模式** 启动一个从官方 `web` 模板生成的兄弟 profile `<profile>-safe`，不加载任何插件。这就是 CLI 文档里的 `dsh --profile rescue --from-default-profile web`。
 - **插件市场。** `dshmarket`（"DSH 可视化插件市场"）作为预设插件安装。
+- **关闭右栏时隐藏残留面板。** DSH 在右栏折叠后仍把 `[data-sidebar-right-panel]` 挂载且可见（`position:absolute`、相对 0 宽的 `_rightbarCol` 向右锚定、`pointer-events:none`）。壁纸类插件会给这个面板套侧栏毛玻璃且不判断开关状态，导致右半屏出现一层半透明模糊。KokonaDSH 会在 `_rightbarCol` 宽度归零时把该面板 `display:none`，展开时恢复。
 
 窗口标题强制为 `Kokona DSH`（拦截 `page-title-updated`），DSH 页面自己的 document title 不会改掉窗口名。
 

@@ -229,7 +229,7 @@ function installTitlebar(config: AppConfig): void {
     const targets = Array.from(shiftTargets).filter(
       (target) => !Array.from(shiftTargets).some((other) => other !== target && other.contains(target))
     )
-    for (const target of targets) target.style.transform = `translateX(-${reserve}px)`
+    for (const target of targets) target.style.marginRight = `${reserve}px`
 
     controls.style.paddingRight = `${config.titlebar.insetRight}px`
 
@@ -633,6 +633,17 @@ function observeSettings(): void {
   new MutationObserver(run).observe(document.body, { childList: true, subtree: true })
 }
 
+function syncRightPanel(): void {
+  const panel = document.querySelector('[data-sidebar-right-panel]')
+  if (!(panel instanceof HTMLElement)) return
+  const column = panel.closest('[class*="_rightbarCol"]')
+  if (!(column instanceof HTMLElement)) return
+  const collapsed = column.getBoundingClientRect().width < 2
+  const hidden = panel.style.getPropertyValue('display') === 'none'
+  if (collapsed && !hidden) panel.style.setProperty('display', 'none', 'important')
+  else if (!collapsed && hidden) panel.style.removeProperty('display')
+}
+
 async function bootstrap(): Promise<void> {
   if (!isDshPage()) return
   const start = () => {
@@ -642,6 +653,8 @@ async function bootstrap(): Promise<void> {
       })
     }
     observeSettings()
+    syncRightPanel()
+    window.setInterval(syncRightPanel, 600)
   }
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', start, { once: true })
   else start()
