@@ -35,11 +35,15 @@ if errorlevel 1 goto :fail
 
 echo.
 echo [ok] Packed: release\win-unpacked
-echo [.] Launching ...
-start "" "%~dp0release\win-unpacked\Kokona DSH.exe"
+echo [.] Launching (detached) ...
+rem Launch through explorer.exe instead of "start". Electron attaches to the
+rem parent console, so an app started with "start" gets killed when this window
+rem is closed. explorer.exe has no console and is not inside this console job
+rem object, so the relaunched app is completely independent of this script.
+explorer.exe "%~dp0release\win-unpacked\Kokona DSH.exe"
 echo.
-echo Done. This window closes itself.
-ping -n 5 127.0.0.1 >nul
+echo Done. Closing this window is safe - the app is independent now.
+ping -n 3 127.0.0.1 >nul
 exit /b 0
 
 :fail

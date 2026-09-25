@@ -373,6 +373,8 @@ body[data-we-sidebar-glass] [data-sidebar-right-panel][data-sidebar-right-open] 
 
 `release/win-unpacked/Kokona DSH.exe` 是 `asar: true` 打出来的，跑着的时候换不了 `app.asar`。所以：托盘退出（点 X 只是隐藏，进程还在）→ 双击 `repack.cmd` → 脚本等进程退出、`npm run pack`、成功后自动重新拉起。脚本里的等待用 `ping -n N 127.0.0.1 >nul`，**不要用 `timeout /t`**（非交互控制台会报 Input redirection is not supported）。
 
+**拉起必须用 `explorer.exe "<exe>"`，不能用 `start`。** Electron 会 attach 到父控制台（Chromium 的 Windows console handler 会处理 `CTRL_CLOSE_EVENT`），所以 `start` 拉起来的那个进程会跟着 CMD 窗口一起被杀 —— 「关掉窗口把应用也带走了」就是这么来的。`explorer.exe` 自己没有控制台、也不在这个控制台的 job object 里，实测：用它拉起来的进程在 `taskkill /F /T` 掉整个控制台进程树之后依然活着。应用本身不依赖 cwd（`src/main` 里所有路径都走 `process.resourcesPath` / `app.getAppPath()`，spawn 核心时都是显式 `cwd`），所以不设工作目录也没关系。
+
 ## 14. 纯白底的根因（第四轮）
 
 ### 为什么一直有「纯白」
