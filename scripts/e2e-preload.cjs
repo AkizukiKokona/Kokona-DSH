@@ -18,6 +18,8 @@ const PAGE = `<!doctype html>
 <html lang="zh-CN"><head><meta charset="utf-8"><style>
 :root{
   --kokona-surface-glass: rgba(255,255,255,.72);
+  --kokona-surface-float: rgba(255,255,255,.85);
+  --kokona-surface-menu: rgba(255,255,255,.94);
   --kokona-surface-selected: rgba(0,0,0,.08);
   --we-blur: 16px; --we-saturate: 1.8;
   --dsw-alias-bg-base: #ffffff;
@@ -52,6 +54,12 @@ body{margin:0;font:14px system-ui}
     <div class="Y0dWHa_schemaParameters">
       <div class="Y0dWHa_schemaParametersTitle">Parameters</div>
       <pre class="Y0dWHa_schemaTree">{"type":"object"}</pre>
+    </div>
+  </div>
+  <div class="Cm_card" id="cmdmenu">
+    <input class="Cm_search">
+    <div class="Cm_viewport">
+      <div class="Cm_row"><span class="Cm_label"><span class="Cm_labelText">/compact</span></span><span class="Cm_detail">压缩上下文</span></div>
     </div>
   </div>
 </div>
@@ -122,6 +130,8 @@ async function main() {
       bannerBackdrop: banner ? (getComputedStyle(banner).backdropFilter || '-') : null,
       hoverCardBg: (() => { const c = document.getElementById('hovercard'); return c ? getComputedStyle(c).backgroundColor : null; })(),
       hoverPreviewBg: (() => { const p = document.querySelector('#hovercard .X_preview'); return p ? getComputedStyle(p).backgroundColor : null; })(),
+      cmdMenuBg: (() => { const m = document.getElementById('cmdmenu'); return m ? getComputedStyle(m).backgroundColor : null; })(),
+      cmdMenuBlur: (() => { const m = document.getElementById('cmdmenu'); return m ? (getComputedStyle(m).backdropFilter || '-') : null; })(),
       // schema panel: Chinese first, the parameter tree untouched in the middle, English last
       schemaOrder: (() => { const p = document.getElementById('schemapanel'); return p === null ? null : Array.from(p.children).map((c) => String(c.className).replace(/^Y0dWHa_/, '')).join(' > '); })(),
       schemaZh: (() => { const z = document.querySelector('#schemapanel [data-kokona-schema-zh]'); return z === null ? null : z.textContent; })(),
@@ -138,6 +148,8 @@ async function main() {
   lines.push(`   banner bg / blur : ${a.bannerBg} / ${a.bannerBackdrop}`)
   lines.push(`   hover card bg    : ${a.hoverCardBg}   (must be rgba(255, 255, 255, 0.85))`)
   lines.push(`   hover preview bg : ${a.hoverPreviewBg}   (same)`)
+  lines.push(`   cmd menu bg      : ${a.cmdMenuBg}   (must be rgba(255, 255, 255, 0.94) - it had no background at all)`)
+  lines.push(`   cmd menu blur    : ${a.cmdMenuBlur}`)
   lines.push(`   schema order     : ${a.schemaOrder}`)
   lines.push(`                      (must be schemaIntro > schemaParameters > schemaDescription)`)
   lines.push(`   schema zh        : ${a.schemaZh}`)
