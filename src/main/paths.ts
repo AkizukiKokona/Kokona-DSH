@@ -32,6 +32,20 @@ export function baselineDir(): string {
   return join(app.getAppPath(), 'resources', 'runtime-baseline')
 }
 
+/**
+ * Where a bundled tree keeps its modules.
+ *
+ * Never name this directory `node_modules` in resources: electron-builder drops any such
+ * directory from extraResources without a word, shipping a bundle that looks complete - manifest
+ * present, directory present - and cannot boot. The tree is copied, then renamed in place.
+ */
+export const PACKED_MODULES_DIR = 'packages'
+
+export function profileSeedDir(): string {
+  if (app.isPackaged) return join(process.resourcesPath, 'profile-seed')
+  return join(app.getAppPath(), 'resources', 'profile-seed')
+}
+
 export function defaultDshHome(): string {
   return join(homedir(), '.dsh')
 }

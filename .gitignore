@@ -3,6 +3,10 @@ out/
 dist/
 release/
 resources/runtime-baseline/
+resources/profile-seed/
+resources/node/
+resources/npm/
+resources/pnpm/
 *.log
 *.tsbuildinfo
 .DS_Store
@@ -17,3 +21,7 @@ scripts/*-login.*
 
 # working files for the custom brand mark (intermediate renders, scratch art)
 brand-work/
+
+# local packaging output (release/ is already ignored; these are per-version and test dirs)
+release-*/
+

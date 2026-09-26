@@ -1573,10 +1573,137 @@ YG 最后说"算了，白色就白色吧"——**浮层一闪而过，文字可�
 
 ## 39. 待办
 
-- **Codeberg 的 v1.1.0** —— 本轮的同步任务在后台跑（4 个产物约 420 MB）
+- **Codeberg 的 v1.1.0** —— 同步任务**已终止**：1.1.0 在干净机器上起不来，不发 Codeberg
 - **`v1.0.4`** 已从 GitHub（release + tag + 本地 tag）和 Codeberg（远端 tag）清掉
 - **`e2e-report.txt`** 仍未加入 `.gitignore`（有意不提交）
 - **未跟踪的草稿**：`KokonaHARNESS.svg`、`name.png`、`tools/` —— 不要动、不要提交
+
+---
+
+## 40. 干净机器事故：1.1.0 在别人电脑上起不来
+
+### 事故
+
+1.1.0 发布后，在一台**没装过任何东西**的电脑上安装，启动直接报：
+
+```
+Node.js not found. Install Node 22.19+ (winget install OpenJS.NodeJS.LTS) or set "nodePath" in config.json
+```
+
+这不是偶发，是**必然**。发行版是给干净机器用的，而这个包**只在开发机上能跑**。
+
+### 三个根因（都真实存在于 1.1.0 的代码里）
+
+**根因 1 — 运行时查找从不使用应用自带的 Node**
+
+`src/main/node.ts` 只查四处：config 的 `nodePath` → PATH → `C:\Program Files\nodejs\node.exe` → `C:\Program Files (x86)\nodejs\node.exe`。
+
+Electron 打包出来的应用**自带一个完整 Node 运行时**（`process.execPath` + `ELECTRON_RUN_AS_NODE=1` 就是纯 Node），那是干净机器上唯一保证存在的。这段代码从头到尾没提过它。
+
+**根因 2 — 就算指向自带二进制也起不来**
+
+`src/main/core/env.ts` 第 5 行 `delete env.ELECTRON_RUN_AS_NODE`。它把「以 Node 模式运行」的标志删掉了，所以自带二进制会以 Electron 身份启动然后失败。**根因 1 和 2 必须一起改，只改一个没有任何效果。**
+
+**根因 3 — 发行包里根本没有内核，而且 DSH 用写死的 `pnpm` 装 profile**
+
+`electron-builder.yml` 的 `extraResources` 只打包了 `icon.png` 和 `brand.svg`；`resources/runtime-baseline` 目录**不存在**。所以首次启动必须从 npm 现装内核 —— 需要网络、npm、pnpm。
+
+更隐蔽的是：即使内核起来了，profile 也初始化不了。`dsh-plugin-manager/lib/types/operations.js` 里写死了
+
+```js
+execa(options.command ?? 'pnpm', [...])
+```
+
+而核心**不带任何包管理器**（`pnpm`/`npm`/`yarn`/`corepack` 全部 absent）。profile 那 252 MB 依赖全靠 PATH 里那个 `pnpm` 装 —— 干净机器上没有。
+
+README 里「内置基线内核让首次启动可以离线完成」这句话当时是**假的**。
+
+### 修复
+
+| 层 | 文件 | 做法 |
+|---|---|---|
+| 运行时 | `src/main/node.ts` | `resolveNodeRuntime()` 优先返回**内置的真 `node.exe`**（`resources/node/`），然后 config，再 PATH |
+| 环境 | `src/main/core/env.ts` | 内置 Node 目录**前置**到 PATH；`ELECTRON_RUN_AS_NODE` 一律删除 |
+| 调用点 | `core/process.ts`、`core/profile.ts`、`runtime/installer.ts`、`runtime/manager.ts`、`shell.ts` | 参数是 `node: NodeRuntime` |
+| 内核 | `electron-builder.yml` | `extraResources` 增加 `resources/runtime-baseline` |
+| profile | `src/main/core/profile.ts` | 新增 `seedProfile()`：有内置副本就直接铺开，不跑模板、不装插件 |
+| 包管理器 | `src/main/core/shims.ts` | 在 `<userData>/bin` 写 `node.cmd` / `pnpm.cmd`，由内置 Node 驱动；`buildCoreEnv` **追加**到 PATH |
+| 终端 | `src/main/terminal.ts` | `dsh` 包装器直接用内置 Node 跑 `bin.js`，不依赖 PATH 里的 `node` |
+| 构建 | `scripts/prepare-baseline.mjs` | vendor 内核和 pnpm |
+
+`resources/runtime-baseline`、`profile-seed`、`node`、`npm`、`pnpm` 全在 `.gitignore` 里 —— 构建产物。
+
+### 我错的第一版方案：用 Electron 自带 Node（实测否定）
+
+第一版我以为 `process.execPath` + `ELECTRON_RUN_AS_NODE=1` 就是干净机器上唯一需要的 Node，还写进了"根因 1/2"。**真机测试直接否掉了它**：
+
+```
+node-addon-require-builtin unsupported: Unsupported/no-context
+unsupported Electron runtime fingerprint: Node 22.22.0, V8 14.0.365.10-electron.0
+(supported Electron versions: 43.0.0, 44.0.0, 45.0.0-alpha.6)
+```
+
+内核的原生模块会**指纹校验运行时**，明确拒绝 Electron 38（本项目用的版本）。所以 Electron 冒充 Node 这条路**根本走不通**，跟标志位怎么设无关。
+
+**正解是内置一个真的 `node.exe`**（本机 v24.19.0，88 MB）—— 内核本来就是 Node 程序，它要的是真 Node；而且这样和 Electron 版本彻底解耦。
+
+**教训**：这个错误是**真机测试**抓出来的，不是读代码读出来的。如果只改完代码就发版，会发出第二个起不来的包。
+
+### 踩到的坑 1：`extraResources` 吃掉 `node_modules`
+
+打包出来的 `resources/runtime-baseline` 只有 **366 KB** —— 只有三个小文件，整个 `node_modules` 树被丢了。
+
+**范围是"`from` 目录的直接子项"**，不是任意深度。证据：`pnpm/dist/node_modules`（嵌套）完整拷进去了（17 MB 全量），而 `runtime-baseline/node_modules`（直接子项）被丢。
+
+所以：
+- 内置树的顶层模块目录叫 **`packages`**，拷贝时改名回 `node_modules`
+- `resources/npm` 里 npm 自己的 `node_modules` 再套一层 `pkg/`，让直接子项是 `pkg` 而不是 `node_modules`
+
+**这个失败极危险**：目录存在、manifest 存在，看起来完全正常。**验证方式只能是逐字节对比源目录和包内目录** —— 只看目录存在等于没查。
+
+### 踩到的坑 2：`%APPDATA%` 骗不了 Electron
+
+第一版干净环境测试是把子进程的 `APPDATA` 指向新目录。**完全无效** —— `app.getPath('appData')` 在 Windows 上走系统 API（`SHGetFolderPath`），不读环境变量。于是测试实例和正式版指向同一个 userData，被单实例锁踢掉（5 秒 exit 0，无日志）。
+
+为此加了 `KOKONA_USER_DATA` 覆盖（`src/main/index.ts`）—— 测试需要它，双开安装也需要它。
+
+**教训**：测试方法本身也会错，而且错了会伪装成"应用启动失败"。测试没写日志这件事本身就是线索。
+
+### 干净机器验证方法
+
+```powershell
+$ud  = 'D:\tmp\cleantest\userdata'
+$dsh = 'D:\tmp\cleantest\dsh'
+# 写一份 config.json 到 $ud，把 dshHome 指向 $dsh（否则会用真实的 ~/.dsh）
+$env:KOKONA_USER_DATA = $ud
+$env:Path = ($env:Path -split ';' | Where-Object { $_ -notmatch 'nodejs|npm|pnpm' }) -join ';'
+& 'release-test\win-unpacked\KokonaHarness.exe'
+```
+
+日志落在 `$ud\logs\`。**这是唯一算数的验证。**
+
+### 教训（最重要的一条）
+
+前面每一轮我都在说「验证通过」。我验证的是**选择器在合成 DOM 里匹配**、**类型检查通过**、**构建成功** —— 这些和「能否在干净机器上安装运行」是正交的。
+
+**发行版的验证基线必须是干净环境，不是开发机。** 开发机上 Node、npm、pnpm、内核全都在，任何依赖它们的代码都会显示「通过」。写死这条：
+
+> 任何涉及安装、启动、依赖解析的改动，验证必须在 `KOKONA_USER_DATA` 隔离 + PATH 无 Node 的环境里做，否则不算验证过。
+
+### 附带发现：本地网络
+
+这台机器上 `github.com:443` **不可达**（`api.github.com` 和 `codeberg.org` 正常），所以之前 GitHub 产物下载慢到 25 KB/s。**不是 GitHub 限流**。本地代理在 `127.0.0.1:7897`（verge-mihomo），走代理后 `github.com` 秒通。git 已全局配置该代理。
+
+### 隐私
+
+打包内容审计过：**没有**会话、历史、配置、凭证、API key，**没有**任何含 `Akizuki` 的路径。profile 副本里唯一带个人痕迹的是 pnpm 的 `.modules.yaml` / `.pnpm-workspace-state-v1.json` / `.bin` 垫片（绝对路径，在别的机器上本来就是错的），已删除。
+
+**`cordis.patch.yml` 里有个人配置**（`ui-theme: light`、`llm-pi-ai` 的凌溪精选供应商），已换成中性版本 —— 只保留 KokonaHarness 自己需要的 `better-sidebar` titlebar 项。
+
+### 相关
+
+- 1.1.0 已发布且**在干净机器上无法启动**，1.1.1 修复
+- 两个仓库在修复验证前**保持私有**
 
 
 

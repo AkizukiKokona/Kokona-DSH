@@ -2,6 +2,7 @@ import { spawn, type ChildProcess } from 'node:child_process'
 import { createServer } from 'node:net'
 import { exec } from '../exec'
 import { createLogger } from '../logger'
+import type { NodeRuntime } from '../node'
 import { buildCoreEnv } from './env'
 import { waitForServer } from './readiness'
 
@@ -31,7 +32,8 @@ export async function findFreePort(preferred: number): Promise<number> {
 }
 
 export interface CoreStartOptions {
-  nodeExe: string
+  /** The Node to run the core with. Carries whether it is the app's own Electron binary. */
+  node: NodeRuntime
   binPath: string
   cwd: string
   profile: string
@@ -67,8 +69,8 @@ export class CoreProcess {
       '--port',
       String(options.port)
     ]
-    log.info(`spawning core: ${options.nodeExe} ${args.join(' ')}`)
-    const child = spawn(options.nodeExe, args, {
+    log.info(`spawning core: ${options.node.exe} ${args.join(' ')}`)
+    const child = spawn(options.node.exe, args, {
       cwd: options.cwd,
       env: buildCoreEnv(options.dshHome),
       stdio: ['ignore', 'pipe', 'pipe'],

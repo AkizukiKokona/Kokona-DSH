@@ -11,6 +11,38 @@ extraResources:
     to: icon.png
   - from: resources/brand.svg
     to: brand.svg
+  # The bundled core. Without it a fresh install has to reach the npm registry through a package
+  # manager before it can boot, which a machine with nothing installed cannot do. Built by
+  # `npm run prepare:baseline`; gitignored because it is ~450 MB of dependencies.
+  #
+  # The filter is load-bearing: without it electron-builder drops the node_modules tree and ships
+  # a 366 KB husk, which is indistinguishable from a working bundle until the core fails to start.
+  - from: resources/runtime-baseline
+    to: runtime-baseline
+    filter:
+      - '**/*'
+  # A prepared profile carrying the bundled plugins and their dependency closure. Without it the
+  # core has to install those through pnpm from a registry before the app is usable.
+  - from: resources/profile-seed
+    to: profile-seed
+    filter:
+      - '**/*'
+  # pnpm, because the core installs a profile's dependencies by shelling out to `pnpm` by name
+  # and does not ship one. Driven through the bundled Node by the shims in core/shims.ts.
+  - from: resources/pnpm
+    to: pnpm
+  # A real Node, so the core runs on the runtime it expects. Not the app's own Electron binary:
+  # Electron can impersonate Node, but the core's native addon fingerprints the runtime and
+  # rejects anything below Electron 43 while this app is on 38.
+  - from: resources/node
+    to: node
+    filter:
+      - '**/*'
+  # npm, for installing or updating a core. Under pkg/ so its node_modules survives; see installer.ts.
+  - from: resources/npm
+    to: npm
+    filter:
+      - '**/*'
 asar: true
 artifactName: KokonaHarness-${version}-${os}-${arch}.${ext}
 win:

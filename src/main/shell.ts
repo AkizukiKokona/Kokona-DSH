@@ -7,8 +7,9 @@ import { buildCoreEnv } from './core/env'
 import { ensureProfile, profileDir } from './core/profile'
 import { detectPluginFailureIn, disablePlugin } from './core/recovery'
 import { CoreProcess, findFreePort } from './core/process'
+import { ensureRuntimeShims } from './core/shims'
 import { createLogger } from './logger'
-import { resolveNodeExecutable } from './node'
+import { resolveNodeRuntime } from './node'
 import { defaultDshHome, dshBinPath, versionDir } from './paths'
 import { checkForUpdate, ensureCore, getActiveVersion, installVersion, listInstalledVersions, switchTo } from './runtime/manager'
 import { openTerminal } from './terminal'
@@ -150,10 +151,13 @@ export class Shell {
       }
 
       this.setPhase('resolving-runtime')
-      const nodeExe = resolveNodeExecutable()
-      if (!nodeExe) {
-        throw new Error('Node.js not found. Install Node 22.19+ (winget install OpenJS.NodeJS.LTS) or set "nodePath" in config.json.')
+      const node = resolveNodeRuntime()
+      if (!node) {
+        throw new Error('No Node runtime available. Set nodePath in config.json.')
       }
+      // Must happen before anything spawns: the profile install needs `pnpm` on PATH, and on a
+      // machine with nothing installed the only one that exists is the shim this writes.
+      ensureRuntimeShims(node)
 
       const ensured = await ensureCore(
         (line) => this.logLine(line),
@@ -166,7 +170,7 @@ export class Shell {
       this.setPhase('bootstrapping-profile')
       const profile = this.activeProfile()
       await ensureProfile({
-        nodeExe,
+        node,
         binPath: dshBinPath(ensured.version),
         cwd: versionDir(ensured.version),
         dshHome,
@@ -179,7 +183,7 @@ export class Shell {
       this.setPhase('starting-core')
       const port = await findFreePort(config.port)
       const url = await this.core.start({
-        nodeExe,
+        node,
         binPath: dshBinPath(ensured.version),
         cwd: versionDir(ensured.version),
         profile,
@@ -250,14 +254,16 @@ export class Shell {
     const dshHome = config.dshHome ?? defaultDshHome()
     const version = this.coreVersion ?? getActiveVersion()
     const binDir = version ? join(versionDir(version), 'node_modules', '.bin') : null
-    const nodeExe = resolveNodeExecutable()
-    const nodeDir = nodeExe ? dirname(nodeExe) : null
+    const node = resolveNodeRuntime()
+    const nodeDir = node ? dirname(node.exe) : null
     openTerminal({
       dshHome,
       env: buildCoreEnv(dshHome),
       binDirs: [binDir, nodeDir],
       profile: config.profile,
-      dshBin: binDir ? join(binDir, 'dsh.cmd') : null
+      dshBin: binDir ? join(binDir, 'dsh.cmd') : null,
+      dshEntry: version ? dshBinPath(version) : null,
+      node
     })
   }
 

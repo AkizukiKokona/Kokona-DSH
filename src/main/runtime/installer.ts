@@ -1,24 +1,42 @@
 import { existsSync, mkdirSync, renameSync, rmSync, writeFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
+import { app } from 'electron'
 import { DSH_PACKAGE } from '../../shared/constants'
 import { dshBinPath, versionDir } from '../paths'
 import { createLogger } from '../logger'
+import type { NodeRuntime } from '../node'
 import { exec } from '../exec'
 
 const log = createLogger('installer')
 
-function resolveNpmCli(nodeExe: string): string | null {
-  const candidate = join(dirname(nodeExe), 'node_modules', 'npm', 'bin', 'npm-cli.js')
+/**
+ * npm, vendored beside the bundled Node.
+ *
+ * Under `pkg/` because electron-builder drops a `node_modules` that sits directly under an
+ * extraResources source, and npm needs its own node_modules to be named that.
+ */
+function bundledNpmCli(): string | null {
+  const root = app.isPackaged
+    ? join(process.resourcesPath, 'npm')
+    : join(app.getAppPath(), 'resources', 'npm')
+  const candidate = join(root, 'pkg', 'bin', 'npm-cli.js')
   return existsSync(candidate) ? candidate : null
+}
+
+function resolveNpmCli(node: NodeRuntime): string | null {
+  const bundled = bundledNpmCli()
+  if (bundled !== null) return bundled
+  const adjacent = join(dirname(node.exe), 'node_modules', 'npm', 'bin', 'npm-cli.js')
+  return existsSync(adjacent) ? adjacent : null
 }
 
 export interface InstallOptions {
   version: string
-  nodeExe: string
+  node: NodeRuntime
   onLine?: (line: string) => void
 }
 
-export async function installCore({ version, nodeExe, onLine }: InstallOptions): Promise<void> {
+export async function installCore({ version, node, onLine }: InstallOptions): Promise<void> {
   const finalDir = versionDir(version)
   const stagingDir = `${finalDir}.installing`
   log.info(`installing ${DSH_PACKAGE}@${version} into ${stagingDir}`)
@@ -39,11 +57,11 @@ export async function installCore({ version, nodeExe, onLine }: InstallOptions):
     'utf8'
   )
 
-  const npmCli = resolveNpmCli(nodeExe)
+  const npmCli = resolveNpmCli(node)
   const args = npmCli
     ? [npmCli, 'install', '--no-audit', '--no-fund', '--loglevel=error']
     : ['install', '--no-audit', '--no-fund', '--loglevel=error']
-  const command = npmCli ? nodeExe : process.platform === 'win32' ? 'npm.cmd' : 'npm'
+  const command = npmCli ? node.exe : process.platform === 'win32' ? 'npm.cmd' : 'npm'
 
   const result = await exec(command, args, {
     cwd: stagingDir,

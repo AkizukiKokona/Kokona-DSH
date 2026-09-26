@@ -1,12 +1,12 @@
-import { cpSync, existsSync, mkdirSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs'
+import { cpSync, existsSync, mkdirSync, readFileSync, readdirSync, renameSync, rmSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import type { Channel, ChannelInfo } from '../../shared/types'
-import { activeFile, baselineDir, dshBinPath, runtimeRoot, versionDir } from '../paths'
+import { PACKED_MODULES_DIR, activeFile, baselineDir, dshBinPath, runtimeRoot, versionDir } from '../paths'
 import { createLogger } from '../logger'
 import { loadConfig } from '../config'
 import { installCore } from './installer'
 import { fetchChannels, resolveChannelVersion } from './registry'
-import { resolveNodeExecutable } from '../node'
+import { resolveNodeRuntime } from '../node'
 
 const log = createLogger('runtime')
 
@@ -74,12 +74,15 @@ export function readBaselineVersion(): string | null {
 
 function installFromBaseline(version: string): boolean {
   const source = baselineDir()
-  if (!existsSync(join(source, 'node_modules'))) return false
+  if (!existsSync(join(source, PACKED_MODULES_DIR))) return false
   const target = versionDir(version)
   log.info(`seeding core ${version} from bundled baseline`)
   rmSync(target, { recursive: true, force: true })
   mkdirSync(target, { recursive: true })
   cpSync(source, target, { recursive: true })
+  // The bundle stores the tree under PACKED_MODULES_DIR because electron-builder silently drops
+  // any directory named node_modules from extraResources.
+  renameSync(join(target, PACKED_MODULES_DIR), join(target, 'node_modules'))
   return existsSync(dshBinPath(version))
 }
 
@@ -101,15 +104,15 @@ export async function ensureCore(
     return { version: active.version, source: active.source, channel: active.channel }
   }
 
-  const nodeExe = resolveNodeExecutable()
-  if (!nodeExe) {
-    throw new Error('Node.js was not found. Install Node 22.19+ or set nodePath in config.json.')
+  const node = resolveNodeRuntime()
+  if (!node) {
+    throw new Error('No Node runtime available. Set nodePath in config.json.')
   }
 
   if (active) {
     log.info(`active core ${active.version} is incomplete; reinstalling it without a registry lookup`)
     onPhase?.('installing-core')
-    await installCore({ version: active.version, nodeExe, onLine })
+    await installCore({ version: active.version, node, onLine })
     writeActive({ version: active.version, source: active.source, channel: active.channel })
     return { version: active.version, source: active.source, channel: active.channel }
   }
@@ -130,15 +133,15 @@ export async function ensureCore(
   if (!version) throw new Error(`No published version found for channel "${config.channel}".`)
 
   onPhase?.('installing-core')
-  await installCore({ version, nodeExe, onLine })
+  await installCore({ version, node, onLine })
   writeActive({ version, source: 'registry', channel: config.channel })
   return { version, source: 'registry', channel: config.channel }
 }
 
 export async function installVersion(version: string, onLine?: (line: string) => void): Promise<void> {
-  const nodeExe = resolveNodeExecutable()
-  if (!nodeExe) throw new Error('Node.js was not found. Install Node 22.19+ or set nodePath in config.json.')
-  await installCore({ version, nodeExe, onLine })
+  const node = resolveNodeRuntime()
+  if (!node) throw new Error('No Node runtime available. Set nodePath in config.json.')
+  await installCore({ version, node, onLine })
 }
 
 export function switchTo(version: string, channel: Channel): void {

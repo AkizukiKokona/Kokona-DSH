@@ -3,6 +3,7 @@ import { existsSync } from 'node:fs'
 import { delimiter } from 'node:path'
 import { DISPLAY_NAME } from '../shared/constants'
 import { createLogger } from './logger'
+import type { NodeRuntime } from './node'
 
 const log = createLogger('terminal')
 
@@ -14,6 +15,13 @@ export interface TerminalOptions {
   profile?: string
   /** Absolute path to the real dsh launcher, so the wrapper can call it by path. */
   dshBin?: string | null
+  /** The core's bin.js, so the wrapper can run it without needing `node` on PATH. */
+  dshEntry?: string | null
+  /**
+   * The app's own Node runtime. When present the wrapper calls dshEntry through it directly,
+   * because a machine that installed nothing has no `node` for the dsh.cmd shim to find.
+   */
+  node?: NodeRuntime | null
 }
 
 function psQuote(value: string): string {
@@ -27,7 +35,15 @@ function launch(command: string, args: string[], options: Parameters<typeof spaw
   child.unref()
 }
 
-export function openTerminal({ dshHome, env, binDirs = [], profile, dshBin = null }: TerminalOptions): void {
+export function openTerminal({
+  dshHome,
+  env,
+  binDirs = [],
+  profile,
+  dshBin = null,
+  dshEntry = null,
+  node = null
+}: TerminalOptions): void {
   const childEnv: NodeJS.ProcessEnv = { ...env }
   const current = childEnv.PATH ?? childEnv.Path ?? ''
   const extra = binDirs.filter((dir): dir is string => typeof dir === 'string' && existsSync(dir))
@@ -46,10 +62,18 @@ export function openTerminal({ dshHome, env, binDirs = [], profile, dshBin = nul
     // the button promises "dsh 可直接使用". Wrap it in a function that supplies the profile
     // unless one is already given. A function rather than an alias, so the remaining arguments
     // are forwarded positionally; -h/--help is left alone so it still prints usage.
-    const wrapper =
-      profile && dshBin !== null && existsSync(dshBin)
-        ? `function dsh { $a = @($args); if ($a -notcontains '--profile' -and $a -notcontains '-h' -and $a -notcontains '--help') { $a = @('--profile', ${psQuote(profile)}) + $a }; & ${psQuote(dshBin)} @a }`
-        : null
+    //
+    // The body prefers the app's own runtime over the dsh.cmd shim: that shim resolves `node`
+    // from PATH, which does not exist on a machine where the user installed nothing.
+    const profileArgs =
+      `$a = @($args); if ($a -notcontains '--profile' -and $a -notcontains '-h' -and $a -notcontains '--help') { $a = @('--profile', ${psQuote(profile ?? '')}) + $a }`
+    let body: string | null = null
+    if (profile && node && dshEntry !== null && existsSync(dshEntry)) {
+      body = `${profileArgs}; & ${psQuote(node.exe)} ${psQuote(dshEntry)} @a`
+    } else if (profile && dshBin !== null && existsSync(dshBin)) {
+      body = `${profileArgs}; & ${psQuote(dshBin)} @a`
+    }
+    const wrapper = body === null ? null : `function dsh { ${body} }`
     const command = [
       `$host.UI.RawUI.WindowTitle = ${psQuote(title)}`,
       `Set-Location -LiteralPath ${psQuote(dshHome)}`,

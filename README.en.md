@@ -29,7 +29,9 @@ existing half-finished desktops don't give you:
 
 1. **The core updates independently of the app.** The shell and the DSH core are versioned
    separately. Any installed core version lives in its own directory; you switch or roll back
-   without reinstalling the app. A bundled baseline core makes first launch work offline.
+   without reinstalling the app. The installer carries the full core, pnpm and a profile with the
+   plugins — on a machine with nothing installed it works the moment it is installed, with no
+   network, no Node and no pnpm.
 2. **A custom dark titlebar.** Frameless window, no white OS caption. The window controls sit on
    the same 48px line as the app's own sidebar brand, and the drag surface only occupies genuinely
    empty pixels — so the app's controls and `dsh-better-sidebar` keep working untouched.
@@ -106,9 +108,17 @@ nav list is `[class*="_navList"]` under the panel. React re-renders are covered 
 
 ## Requirements
 
-- Node.js `^22.19.0 || >=24` on PATH (used to run the core). Install with
-  `winget install OpenJS.NodeJS.LTS`.
-- pnpm `>=11` on PATH for plugin management (`dsh plugin ...`). `npm i -g pnpm@11.7.0`.
+**Using a release: nothing to install.** The installer carries its own Node runtime, the DSH core, pnpm and a profile with the plugins. It works the moment it is installed — no Node, npm or pnpm required.
+
+Feature dependencies:
+
+- **The dynamic wallpaper feature needs [Wallpaper Engine](https://www.wallpaperengine.io/) installed on the same machine.** Without it only that feature is unavailable; everything else works.
+- **The dynamic wallpaper feature is Windows only.** It does not exist on macOS or Linux.
+
+**Building from source** is what needs:
+
+- Node.js `^22.19.0 || >=24` on PATH. Install with `winget install OpenJS.NodeJS.LTS`.
+- pnpm `>=11` on PATH for plugin management. `npm i -g pnpm@11.7.0`.
 
 ## Develop
 
@@ -122,11 +132,26 @@ npm run build
 ## Package
 
 ```sh
-npm run prepare:baseline        # optional: vendor a core into resources/runtime-baseline
+npm run prepare:baseline        # required: vendor the core and pnpm into resources/
 npm run dist                    # electron-builder -> release/
 ```
 
-Without a bundled baseline the app installs the current channel version from npm on first launch.
+`prepare:baseline` produces two gitignored build artifacts (~470 MB): `resources/runtime-baseline`
+(the core) and `resources/pnpm`. A third, `resources/profile-seed` (a profile carrying the plugins),
+comes from a profile that already has them installed. **Missing any one of the three produces an
+installer that cannot start on a clean machine.**
+
+After packaging, **check the real byte counts** under `release/win-unpacked/resources/`:
+
+| Directory | Expected |
+|---|---|
+| `runtime-baseline` | ~453 MB, with `packages/@deepseek-ai/dsh/lib/bin.js` present |
+| `profile-seed` | ~252 MB, with the four plugin directories under `packages/` |
+| `pnpm` | ~17 MB, with `bin/pnpm.cjs` present |
+
+**Note**: electron-builder silently drops any directory named `node_modules` from
+`extraResources` — leaving a 366 KB husk. That is why the bundled trees are called `packages` and
+renamed during the copy. Checking that a directory exists proves nothing; check its size.
 
 ## Boot splash and icon
 

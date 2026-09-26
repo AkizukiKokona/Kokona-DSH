@@ -1,13 +1,15 @@
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
+import { cpSync, existsSync, mkdirSync, readFileSync, renameSync, rmSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { exec } from '../exec'
 import { createLogger } from '../logger'
+import type { NodeRuntime } from '../node'
+import { PACKED_MODULES_DIR, profileSeedDir } from '../paths'
 import { buildCoreEnv } from './env'
 
 const log = createLogger('profile')
 
 export interface ProfileContext {
-  nodeExe: string
+  node: NodeRuntime
   binPath: string
   cwd: string
   dshHome: string
@@ -33,7 +35,7 @@ function readProfileDeps(dir: string): Record<string, string> {
 }
 
 async function runDsh(ctx: ProfileContext, args: string[]): Promise<number | null> {
-  const result = await exec(ctx.nodeExe, [ctx.binPath, ...args], {
+  const result = await exec(ctx.node.exe, [ctx.binPath, ...args], {
     cwd: ctx.cwd,
     env: buildCoreEnv(ctx.dshHome),
     windowsHide: true,
@@ -42,9 +44,32 @@ async function runDsh(ctx: ProfileContext, args: string[]): Promise<number | nul
   return result.code
 }
 
+/**
+ * Lay down the profile that ships with the app.
+ *
+ * The bundled profile already carries every plugin and every transitive dependency, so a machine
+ * that has installed nothing never has to reach a registry to get a working profile.
+ *
+ * Deliberately not used in safe mode: the shell passes an empty presetPlugins there, and a safe
+ * profile must stay plugin-free or it cannot do the one job it exists for.
+ */
+function seedProfile(ctx: ProfileContext): boolean {
+  if (ctx.presetPlugins.length === 0) return false
+  const source = profileSeedDir()
+  if (!existsSync(join(source, PACKED_MODULES_DIR))) return false
+  const dir = profileDir(ctx.dshHome, ctx.profile)
+  log.info(`seeding profile "${ctx.profile}" from the bundled copy`)
+  rmSync(dir, { recursive: true, force: true })
+  mkdirSync(dir, { recursive: true })
+  cpSync(source, dir, { recursive: true })
+  renameSync(join(dir, PACKED_MODULES_DIR), join(dir, 'node_modules'))
+  return existsSync(join(dir, 'package.json'))
+}
+
 async function initProfile(ctx: ProfileContext): Promise<void> {
   const dir = profileDir(ctx.dshHome, ctx.profile)
   if (existsSync(join(dir, 'package.json'))) return
+  if (seedProfile(ctx)) return
   log.info(`initializing profile "${ctx.profile}" from template "web"`)
   await runDsh(ctx, ['--profile', ctx.profile, '--from-default-profile', 'web', '--dump-config'])
   if (existsSync(join(dir, 'package.json'))) return

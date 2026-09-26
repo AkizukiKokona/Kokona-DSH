@@ -1,0 +1,61 @@
+A. 报错下方注释 + 压缩行底色
+   note present     : true   lines=2   count=2   (count must be 2)
+   note text        : 无法修改「D:\kokonadsh\src\shared\errors.ts」：该文件尚未被读取 —— 请先读取该文件，然后重试。这个报错未必是真的「没读过」。文件观测记录只存在核心进程的内存里，核心重启或插件重载后会清空，所以重启前读过的文件也会报这个。重读一次该文件再试即可。
+   note after card  : true   (must be true - below the card, not in its header)
+   note INSIDE card : false   (must be false)
+   compaction bg    : rgba(0, 0, 0, 0)   (must be transparent)
+   compaction blur  : none
+   banner bg / blur : rgba(0, 0, 0, 0) / none
+   hover card bg    : rgba(255, 255, 255, 0.7)   (must be rgba(255, 255, 255, 0.7) - same as the add menu)
+   hover preview bg : rgba(255, 255, 255, 0.7)   (same)
+   cmd menu bg      : rgba(255, 255, 255, 0.7)   (must be rgba(255, 255, 255, 0.7) - it had no background at all)
+   cmd menu blur    : blur(28.8px) saturate(2.07) brightness(1.03)
+   ADD menu bg      : rgba(255, 255, 255, 0.7)   (must be rgba(255, 255, 255, 0.7) - the real one, _menu + _viewport)
+   ADD menu blur    : blur(28.8px) saturate(2.07) brightness(1.03)
+   diff added line  : rgba(0, 0, 0, 0)   (must NOT be the menu surface - _add collides with the diff row)
+   diff +n gutter   : rgba(0, 0, 0, 0)   (must NOT be the menu surface either)
+   schema order     : schemaIntro > schemaParameters >  > schemaDescription
+   schema title zh  : 参数   (must be 参数, was Parameters)
+   english label    : （英语原文）   (must be （英语原文）, bold black, above the English)
+   english label fx : 600 / rgb(0, 0, 0)
+   english padding  : 14px   (must be 14px - it lost the intro's inset when moved)
+                      (must be schemaIntro > schemaParameters >  > schemaDescription)
+                      the empty segment is the （英语原文） label - it has no class of its own)
+   schema zh        : 记录并更新任务清单，用于规划多步骤工作并展示进度；简单的一步任务可以跳过。
+   schema zh in intro: true   (must be true - right after the tool name)
+A2. 非简体中文下必须不动（lang=en）
+   english back in intro : true   (must be true - not moved to the bottom)
+   chinese inserted      : false   (must be false)
+   htmlLang / navigator  : en / zh-CN
+   zh node count         : 0
+A3. 注释被重渲染抹掉后必须自己回来
+   card element reused  : true   (the case the old flag survived)
+   came back in 1 tick  : true   (must be true - this is the blank-output bug)
+   note count           : 2   (must be 2)
+
+B. 右键输入框
+   menu present     : true
+   items            : 剪切Ctrl+X [true] | 复制Ctrl+C [true] | 粘贴Ctrl+V [false] | 全选Ctrl+A [true]
+   menu / item width: 122 / 112 px
+   label->key gap   : 27 px
+   OVERLAP          : false   (must be false)
+   backdrop / bg    : blur(28.8px) saturate(2.07) brightness(1.03) / color(srgb 1 1 1 / 0.2)
+
+C. 右键控件（应不接管）
+   menu present     : false   (expected false)
+
+D. 选中正文后右键
+   menu present     : true
+   items            : 剪切Ctrl+X [true] | 复制Ctrl+C [true] | 粘贴Ctrl+V [false] | 全选Ctrl+A [true]
+
+E. 无选区、指针压在文字上（命中测试路径）
+   menu present     : true
+   caret nodeType   : 3   (3 = text node)
+   items            : 剪切Ctrl+X [true] | 复制Ctrl+C [true] | 粘贴Ctrl+V [false] | 全选Ctrl+A [true]
+
+F. 点击菜单项
+   clicked          : 剪切Ctrl+X
+   menu closed      : true
+   focus kept on    : #field   (must stay #field, or the action lands nowhere)
+
+actions received by main: ["cut"]

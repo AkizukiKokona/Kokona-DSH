@@ -14,7 +14,12 @@ app.setName(APP_NAME)
 // The product was renamed to KokonaHarness in 1.0.2. Pin the data directory to
 // its original name so an in-place upgrade keeps its config, logs and the
 // already-downloaded core instead of re-fetching everything into a new folder.
-app.setPath('userData', join(app.getPath('appData'), 'KokonaDSH'))
+//
+// KOKONA_USER_DATA overrides the pin. It is needed because app.getPath('appData') goes through
+// the Windows shell API and ignores %APPDATA%, so there is otherwise no way to run a second copy
+// against a fresh data directory - which is how a clean-machine install gets verified.
+const userDataOverride = process.env.KOKONA_USER_DATA
+app.setPath('userData', userDataOverride ? userDataOverride : join(app.getPath('appData'), 'KokonaDSH'))
 if (process.platform === 'win32') app.setAppUserModelId('com.kokona.dsh')
 
 function showMainWindow(): void {

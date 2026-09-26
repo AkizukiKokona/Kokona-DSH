@@ -26,7 +26,7 @@
 
 一个 DeepSeek Harness（`dsh`）桌面外壳。Electron + 网页渲染的内核，补上现有那些半成品桌面端缺的两件事：
 
-1. **内核与应用分开更新。** 外壳和 DSH 内核各自版本化。每个已安装的内核版本放在独立目录，切换或回滚都不用重装应用；内置基线内核让首次启动可以离线完成。
+1. **内核与应用分开更新。** 外壳和 DSH 内核各自版本化。每个已安装的内核版本放在独立目录，切换或回滚都不用重装应用；安装包内置完整内核、pnpm 和一份装好插件的 profile —— 在一台什么都没装的机器上装完就能直接用，首次启动不需要联网，也不需要 Node 或 pnpm。
 2. **自定义深色标题栏。** 无边框窗口，没有那条白色的系统标题栏。窗口控制按钮和应用自己的侧栏品牌处在同一条 48px 线上，拖拽区域只占用真正空白的像素 —— 所以应用的控件和 `dsh-better-sidebar` 都照常工作。
 
 ## 架构
@@ -74,8 +74,17 @@ DSH 内核（@deepseek-ai/dsh）  <- 按版本装到 <userData>/runtime/<version
 
 ## 环境要求
 
-- PATH 里有 Node.js `^22.19.0 || >=24`（用于跑内核）：`winget install OpenJS.NodeJS.LTS`。
-- PATH 里有 pnpm `>=11`，用于插件管理（`dsh plugin ...`）：`npm i -g pnpm@11.7.0`。
+**用发行版：不需要安装任何东西。** 安装包自带 Node 运行时、DSH 内核、pnpm 和插件 profile，装完直接能用，不需要 Node、npm 或 pnpm。
+
+功能依赖：
+
+- **动态壁纸需要本机已安装 [Wallpaper Engine](https://www.wallpaperengine.io/)。** 没装的话只有这个功能不可用，其余功能不受影响。
+- **动态壁纸仅限 Windows。** macOS 和 Linux 上没有这个功能。
+
+**从源码开发**才需要：
+
+- PATH 里有 Node.js `^22.19.0 || >=24`：`winget install OpenJS.NodeJS.LTS`。
+- PATH 里有 pnpm `>=11`（用于插件管理）：`npm i -g pnpm@11.7.0`。
 
 ## 开发
 
@@ -89,11 +98,21 @@ npm run build
 ## 打包
 
 ```sh
-npm run prepare:baseline        # 可选：把一份内核内置到 resources/runtime-baseline
+npm run prepare:baseline        # 必需：内置内核和 pnpm 到 resources/
 npm run dist                    # electron-builder -> release/
 ```
 
-未内置基线时，应用首次启动会从 npm 安装当前频道版本。
+`prepare:baseline` 生成两个被 gitignore 的构建产物（约 470 MB）：`resources/runtime-baseline`（内核）和 `resources/pnpm`。还需要 `resources/profile-seed`（含插件的 profile，从一份装好插件的 profile 复制而来）。**缺任何一个，装出来的包在干净机器上都无法启动。**
+
+打包后**必须**核对 `release/win-unpacked/resources/` 的实际体积：
+
+| 目录 | 期望 |
+|---|---|
+| `runtime-baseline` | ~453 MB，且 `packages/@deepseek-ai/dsh/lib/bin.js` 存在 |
+| `profile-seed` | ~252 MB，且 `packages/` 下四个插件目录存在 |
+| `pnpm` | ~17 MB，且 `bin/pnpm.cjs` 存在 |
+
+**注意**：electron-builder 会静默丢弃 `extraResources` 里任何名为 `node_modules` 的目录 —— 只留一个 366 KB 的空壳。所以内置目录一律叫 `packages`，拷贝时再改名。只看目录存在等于没查，必须看字节数。
 
 ## 启动页与图标
 
