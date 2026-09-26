@@ -926,6 +926,80 @@ const hasUpdate = compare(release.version, current) > 0
 PowerShell（`A positional parameter cannot be found that accepts argument '^'`）。
 改成不用管道的写法：`(ConvertFrom-Json (Get-Content 'package.json' -Raw)).version`。
 
+## 22. 安全模式被误触发导致「插件全丢」（2026-09-26 修的 bug）
+
+**现象**：启动后插件全没了、设置像被重置、像「另一个 DSH」，`repack.cmd` / `setver.cmd` 都救不回来。
+
+**真相**：什么都没丢。`%APPDATA%\KokonaDSH\config.json` 的 `safeMode` 被写成了 `true`，
+于是启动的是 `<profile>-safe`（从 `web` 模板生成、**不加载任何插件**）。插件、模型配置、设置
+全在 `kokona` profile 里，好好的。
+
+**根因**：`bootOnce()` 里 `await window.loadURL(url)` 被包在 boot 的 try 里。Electron 的
+`loadURL()` promise 会在 **webContents 的第一次 `did-fail-load`** 时 reject —— 启动时我们先用
+`loadRenderer(window, '#boot')` 加载启动屏，核心就绪后再 `loadURL(核心URL)` 会**取代**那次导航，
+触发 `ERR_ABORTED (-3) loading '.../index.html#boot'`，`loadURL` 的 promise 就以这个错误 reject
+→ `bootOnce` 返回 false → 日志里没有插件线索 → 进安全模式并 `patchConfig({safeMode:true})` 持久化。
+**核心其实是好的**（日志里 `core ready` 就在报错前一行）。
+
+**修法**：核心就绪后，渲染层加载失败绝不算启动失败。
+
+```ts
+this.serverUrl = url
+this.setPhase('ready')
+const window = getMainWindow()
+if (window) {
+  try {
+    await window.loadURL(url)
+  } catch (error) {
+    log.warn(`renderer load failed after core ready: ${(error as Error).message}`)
+  }
+}
+return true
+```
+
+**被卡住时怎么救**（不用重装、不用重建）：
+1. 把 `%APPDATA%\KokonaDSH\config.json` 的 `"safeMode"` 改成 `false`；或
+2. 设置里「重启菜单 → 退出安全模式并重启」（`relaunchApp(false)`）。
+
+重启即可，插件/设置/模型配置原样回来。
+
+**排查要点**：
+- 先看 `config.json` 的 `safeMode`，以及日志里 `spawning core ... --profile` 是 `kokona` 还是 `kokona-safe`。
+- 日志里 `core ready` 出现在「进安全模式」之前 → 核心没坏，是渲染层/其它误判。
+- **别急着重建/重装**：数据都在 profile 里，重建只会白等。
+
+**设计红线**：`boot()` 只在**核心/运行时/profile 真的起不来**时才允许进安全模式。任何
+「核心已 ready」之后的失败都不许触发安全模式，更不许把 `safeMode` 持久化。
+
+## 23. 「dsh 被占用」——残留的孤儿核心（2026-09-26）
+
+**现象**：应用里新建会话 / 发消息时，DSH 提示工作区或实例「被占用」。
+
+**原因**：还有一个 **孤儿 `node` 核心**在跑同一个 `--profile kokona`。外壳被强杀
+（`taskkill`、崩溃，或调试时直接结束进程）时 `before-quit` 没机会执行，核心就留了下来，
+一直占着 profile / 工作区锁。实测遇到过：一个 10:03 启动的核心，父进程早已消失，仍在跑。
+
+**排查**：
+
+```powershell
+Get-CimInstance Win32_Process -Filter "Name='node.exe'" |
+  Where-Object { $_.CommandLine -match 'dsh' } |
+  Select-Object ProcessId, ParentProcessId, CreationDate, CommandLine
+```
+
+正常应当只有 **一个** `--profile kokona` 的核心，且其父进程就是当前 `KokonaHarness.exe`。
+`PPID` 指向一个已不存在的进程的那个，就是孤儿。
+
+**处理**：`taskkill /PID <孤儿PID> /T /F`。
+
+**避免**：退出应用走托盘 / `before-quit`（会先停核心）；调试时不要直接 `taskkill` 外壳；
+要强杀就带 `/T` 杀整棵进程树。
+
+**可做但未做**：启动时主动清理同 profile 的孤儿核心（枚举进程 → 父进程不存在且命令行匹配
+本 runtime + profile → 杀掉）。若要做，务必先确认它不是另一个正在运行的合法实例，别误杀。
+
+
+
 
 
 

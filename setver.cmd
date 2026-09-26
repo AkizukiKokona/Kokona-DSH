@@ -61,6 +61,10 @@ if errorlevel 1 goto :fail
 
 echo.
 echo [.] Launching (detached) ...
+rem Let the filesystem settle first: the app must not start reading a just-rewritten
+rem archive while it is still cold, or the boot screen's first load can still be in
+rem flight when the core reports ready.
+ping -n 4 127.0.0.1 >nul
 rem Launch through explorer.exe instead of "start": an app started with "start"
 rem attaches to this console and dies with the window.
 explorer.exe "%EXE%"

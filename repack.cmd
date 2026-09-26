@@ -66,6 +66,10 @@ if defined PACKED (
 )
 
 echo [.] Launching (detached) ...
+rem Let the filesystem settle first. Relaunching the instant a 600 MB repack finishes
+rem means the boot screen's very first load runs cold, which is exactly the window in
+rem which the core can come ready while that navigation is still in flight.
+ping -n 4 127.0.0.1 >nul
 rem Launch through explorer.exe instead of "start". Electron attaches to the
 rem parent console, so an app started with "start" gets killed when this window
 rem is closed. explorer.exe has no console and is not inside this console job

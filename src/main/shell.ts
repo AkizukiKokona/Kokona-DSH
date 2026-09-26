@@ -197,7 +197,17 @@ export class Shell {
       this.serverUrl = url
       this.setPhase('ready')
       const window = getMainWindow()
-      if (window) await window.loadURL(url)
+      if (window) {
+        // The core is up, so this must never fail the boot. Electron rejects the
+        // loadURL() promise on the first did-fail-load for the webContents, which
+        // fires ERR_ABORTED for the boot screen we supersede here. Swallowing it
+        // keeps safe mode reserved for real core/profile failures.
+        try {
+          await window.loadURL(url)
+        } catch (error) {
+          log.warn(`renderer load failed after core ready: ${(error as Error).message}`)
+        }
+      }
       return true
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error)
