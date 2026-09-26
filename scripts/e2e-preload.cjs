@@ -146,7 +146,7 @@ async function main() {
   lines.push(`   compaction bg    : ${a.compactionBg}   (must be transparent)`)
   lines.push(`   compaction blur  : ${a.compactionBackdrop}`)
   lines.push(`   banner bg / blur : ${a.bannerBg} / ${a.bannerBackdrop}`)
-  lines.push(`   hover card bg    : ${a.hoverCardBg}   (must be rgba(255, 255, 255, 0.85))`)
+  lines.push(`   hover card bg    : ${a.hoverCardBg}   (must be rgba(255, 255, 255, 0.97) - same surface as the add menu)`)
   lines.push(`   hover preview bg : ${a.hoverPreviewBg}   (same)`)
   lines.push(`   cmd menu bg      : ${a.cmdMenuBg}   (must be rgba(255, 255, 255, 0.97) - it had no background at all)`)
   lines.push(`   cmd menu blur    : ${a.cmdMenuBlur}`)

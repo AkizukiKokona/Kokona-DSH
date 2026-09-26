@@ -206,11 +206,11 @@ html [class*="_panel"]:has([class*="_navList"]) [class*="_themeCube"][aria-press
    (#2C2C2E dark, near-white light) and .preview with --dsw-alias-bg-layer-1. Because the card
    is position:fixed it renders outside [data-conversation-scroll], so neither the wallpaper
    tint nor the transcript's bg-layer-1 remap reaches it, and it lands as a solid slab over
-   the glass. YG wants it translucent but a step whiter than the 产物 rows, so it still reads
-   as floating above them. Anchored on data-diff-note, which is authored by the core and
+   the glass. YG wants it on the same surface as the composer's add menu, so both floating
+   menus carry one weight. Anchored on data-diff-note, which is authored by the core and
    appears only inside such a preview, rather than on the hashed module class. */
 [class*="_card"]:has([data-diff-note]),
-[class*="_preview"]:has([data-diff-note]) { background-color: var(--kokona-surface-float) !important; }
+[class*="_preview"]:has([data-diff-note]) { background-color: var(--kokona-surface-menu) !important; }
 /* Every code surface — markdown code blocks, the edit/diff block, tool IO cards,
    the skill card — fills with --dsw-alias-markdown-code-block, an opaque
    near-white in the light theme. Route it to the same chip the 产物 cards use.
