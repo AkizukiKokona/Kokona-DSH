@@ -24,7 +24,7 @@ Node.js not found. Install Node 22.19+ (winget install OpenJS.NodeJS.LTS) or set
 | **pnpm** | 17 MB | 插件管理用 |
 | **插件 profile** | 252 MB | 含下列插件及其全部依赖 |
 
-**首次启动不需要网络，不需要 Node、npm 或 pnpm。**
+**首次启动不需要网络，不需要 Node、npm 或 pnpm。** 安装包约 291 MB（内置资源约 830 MB，压缩后）。
 
 ### 内置插件
 
@@ -54,7 +54,7 @@ Node.js not found. Install Node 22.19+ (winget install OpenJS.NodeJS.LTS) or set
 
 ## 已知限制
 
-- **安装包体积显著增大**（约 250 MB）。这是「零依赖可用」的代价 —— 需要离线可用就必须把运行时带在身上。
+- **安装包体积显著增大**（约 291 MB）。这是「零依赖可用」的代价 —— 需要离线可用就必须把运行时带在身上。
 - macOS 和 Linux 的产物由 CI 构建，本版本在 Windows 上完成了干净环境实测。
 
 ## 校验

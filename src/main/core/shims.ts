@@ -1,5 +1,5 @@
 import { app } from 'electron'
-import { existsSync, mkdirSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { createLogger } from '../logger'
 import type { NodeRuntime } from '../node'
@@ -12,12 +12,38 @@ export function shimDir(): string {
   return join(userDataDir(), 'bin')
 }
 
-function pnpmEntry(): string | null {
-  const root = app.isPackaged
+function pnpmRoot(): string {
+  return app.isPackaged
     ? join(process.resourcesPath, 'pnpm')
     : join(app.getAppPath(), 'resources', 'pnpm')
-  const entry = join(root, 'bin', 'pnpm.cjs')
-  return existsSync(entry) ? entry : null
+}
+
+/**
+ * The pnpm entry, and whether it is a JS script or a standalone binary.
+ *
+ * Read from the package's own `bin` field rather than hard-coded: the entry moved between majors -
+ * a `.cjs` in some releases, a platform `.exe` in others - and a path that is wrong here fails
+ * only when a profile install runs on a machine that has no pnpm of its own, which is the one case
+ * the shim exists for.
+ */
+function pnpmEntry(): { path: string; standalone: boolean } | null {
+  try {
+    const root = pnpmRoot()
+    const pkg = JSON.parse(readFileSync(join(root, 'package.json'), 'utf8')) as {
+      bin?: string | Record<string, string>
+    }
+    const relative = typeof pkg.bin === 'string' ? pkg.bin : pkg.bin?.pnpm
+    if (relative === undefined) return null
+    const entry = join(root, relative)
+    if (!existsSync(entry)) return null
+    // A .js/.cjs has to go through Node; anything else is a standalone platform binary that runs
+    // itself. Matched on the script extensions rather than on .exe, because the binary on macOS
+    // and Linux carries no extension at all.
+    const standalone = !/\.(c|m)?js$/i.test(entry)
+    return { path: entry, standalone }
+  } catch {
+    return null
+  }
 }
 
 function writeShim(file: string, lines: string[]): void {
@@ -40,9 +66,11 @@ export function ensureRuntimeShims(node: NodeRuntime): string | null {
     writeShim(join(dir, 'node.cmd'), ['@echo off', `"${node.exe}" %*`])
     const pnpm = pnpmEntry()
     if (pnpm === null) {
-      log.warn('no bundled pnpm found; a profile install will need one on PATH')
+      log.warn('no usable bundled pnpm found; a profile install will need one on PATH')
     } else {
-      writeShim(join(dir, 'pnpm.cmd'), ['@echo off', `"${node.exe}" "${pnpm}" %*`])
+      // A platform binary runs itself; a .cjs has to go through Node.
+      const invocation = pnpm.standalone ? `"${pnpm.path}"` : `"${node.exe}" "${pnpm.path}"`
+      writeShim(join(dir, 'pnpm.cmd'), ['@echo off', `${invocation} %*`])
     }
     return dir
   } catch (error) {

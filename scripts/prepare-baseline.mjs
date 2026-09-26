@@ -20,20 +20,20 @@ const resourcesDir = join(projectRoot, 'resources')
 const DSH_PACKAGE = '@deepseek-ai/dsh'
 const npmCmd = process.platform === 'win32' ? 'npm.cmd' : 'npm'
 
-/** The plugins the bundled profile ships with. */
-const PROFILE_PLUGINS = [
-  'dsh-better-sidebar',
-  'dsh-plugin-wallpaper-engine',
-  'dsh-whale-widget',
-  'dshmarket'
-]
+/**
+ * The plugins the bundled profile ships with, pinned to the set that is known to work together.
+ * `latest` is not good enough here: these plugins declare overlapping peers on the core's UI
+ * packages, and resolving them freshly picks a combination the core then refuses to load.
+ */
+const PROFILE_PLUGINS = {
+  'dsh-better-sidebar': '^0.21.1',
+  'dsh-plugin-wallpaper-engine': '1.0.1',
+  'dsh-whale-widget': '0.3.15',
+  'dshmarket': '^1.65.1'
+}
 
 /** The loader bundles a profile mounts before any plugin. */
-const PROFILE_BUNDLES = [
-  '@deepseek-ai/dsh-base',
-  '@deepseek-ai/dsh-web-app',
-  ...PROFILE_PLUGINS
-]
+const PROFILE_BUNDLES = ['@deepseek-ai/dsh-base', '@deepseek-ai/dsh-web-app', ...Object.keys(PROFILE_PLUGINS)]
 
 /**
  * electron-builder drops any `node_modules` sitting directly under an extraResources source, and
@@ -87,7 +87,9 @@ const nodeDir = join(resourcesDir, 'node')
 console.log(`[node] copying ${process.execPath}`)
 fresh(nodeDir)
 const nodeRoot = dirname(process.execPath)
-for (const entry of ['node.exe', 'node', 'node_modules', 'npm', 'npm.cmd', 'npx', 'npx.cmd', 'corepack', 'corepack.cmd', 'LICENSE', 'README.md', 'CHANGELOG.md']) {
+// node_modules is deliberately not copied. npm is vendored separately, and a node_modules sitting
+// directly under an extraResources source is dropped by electron-builder without a word.
+for (const entry of ['node.exe', 'node', 'npm', 'npm.cmd', 'npx', 'npx.cmd', 'corepack', 'corepack.cmd', 'LICENSE', 'README.md', 'CHANGELOG.md']) {
   const from = join(nodeRoot, entry)
   if (existsSync(from)) cpSync(from, join(nodeDir, entry), { recursive: true })
 }
@@ -116,17 +118,31 @@ if (npmSource === undefined) {
 
 // --- pnpm -------------------------------------------------------------------------------------
 // The core shells out to `pnpm` by bare name to install a profile's dependencies and ships none.
+//
+// Staged in its own directory: `fresh()` empties the destination, so installing straight into
+// resources/pnpm would delete the tree being copied out of it.
 const pnpmDir = join(resourcesDir, 'pnpm')
+const pnpmStage = join(resourcesDir, '.pnpm-staging')
 console.log('[pnpm] installing')
-install(pnpmDir, { pnpm: 'latest' })
-const pnpmSource = join(pnpmDir, 'node_modules', 'pnpm')
-if (!existsSync(join(pnpmSource, 'bin', 'pnpm.cjs'))) {
-  throw new Error(`pnpm install failed: ${join(pnpmSource, 'bin', 'pnpm.cjs')} missing`)
+install(pnpmStage, { pnpm: 'latest' })
+const pnpmSource = join(pnpmStage, 'node_modules', 'pnpm')
+const pnpmPkg = existsSync(join(pnpmSource, 'package.json'))
+  ? JSON.parse(readFileSync(join(pnpmSource, 'package.json'), 'utf8'))
+  : null
+// The entry point moved between majors - a JS script in some releases, a platform binary in
+// others - so read it from the package instead of guessing. shims.ts runs whatever this resolves to.
+const pnpmBinField = typeof pnpmPkg?.bin === 'string' ? pnpmPkg.bin : pnpmPkg?.bin?.pnpm
+const pnpmEntry = pnpmBinField ? join(pnpmSource, pnpmBinField) : null
+if (pnpmEntry === null || !existsSync(pnpmEntry)) {
+  throw new Error(`pnpm install failed: no entry point found in ${pnpmSource}`)
 }
-const pnpmVersion = JSON.parse(readFileSync(join(pnpmSource, 'package.json'), 'utf8')).version
+console.log(`[pnpm] entry: ${pnpmBinField}`)
 fresh(pnpmDir)
 cpSync(pnpmSource, pnpmDir, { recursive: true })
-console.log(`[pnpm] done: ${pnpmVersion}`)
+rmSync(pnpmStage, { recursive: true, force: true })
+// The entry at its final location. The staged copy is gone by the time the profile install runs.
+const pnpmInstalled = join(pnpmDir, pnpmBinField)
+console.log(`[pnpm] done: ${pnpmPkg.version}`)
 
 // --- profile ----------------------------------------------------------------------------------
 // A prepared profile, so the app never has to install the plugins from a registry on a machine
@@ -137,7 +153,7 @@ fresh(seedDir)
 writeJson(join(seedDir, 'package.json'), {
   name: 'dsh-profile-kokona',
   private: true,
-  dependencies: Object.fromEntries(PROFILE_PLUGINS.map((name) => [name, 'latest'])),
+  dependencies: PROFILE_PLUGINS,
   dsh: { profile: { bundles: PROFILE_BUNDLES, patchReload: 'live' } }
 })
 writeFileSync(
@@ -167,9 +183,12 @@ writeFileSync(
     '    titleBarCompat: true\n' +
     '    agentOpenTools: true\n'
 )
-run(['install', '--no-audit', '--no-fund', '--loglevel=error'], seedDir)
-if (!existsSync(join(seedDir, 'node_modules', PROFILE_PLUGINS[0]))) {
-  throw new Error(`profile install failed: ${join(seedDir, 'node_modules', PROFILE_PLUGINS[0])} missing`)
+// pnpm, not npm. The core installs a profile's dependencies with pnpm, these plugins declare
+// overlapping peers on the core's UI packages, and npm refuses to resolve them at all.
+execFileSync(pnpmInstalled, ['install', '--no-frozen-lockfile'], { cwd: seedDir, stdio: 'inherit' })
+const firstPlugin = Object.keys(PROFILE_PLUGINS)[0]
+if (!existsSync(join(seedDir, 'node_modules', firstPlugin))) {
+  throw new Error(`profile install failed: ${join(seedDir, 'node_modules', firstPlugin)} missing`)
 }
 
 // pnpm writes absolute paths from this machine into these, and .bin holds shell shims that point
@@ -178,6 +197,6 @@ for (const junk of ['.modules.yaml', '.pnpm-workspace-state-v1.json', '.bin']) {
   rmSync(join(seedDir, 'node_modules', junk), { recursive: true, force: true })
 }
 renameSync(join(seedDir, 'node_modules'), join(seedDir, PACKED))
-console.log(`[profile] done: ${PROFILE_PLUGINS.length} plugins`)
+console.log(`[profile] done: ${Object.keys(PROFILE_PLUGINS).length} plugins`)
 
 console.log('[baseline] all five trees ready; electron-builder picks them up from extraResources')
