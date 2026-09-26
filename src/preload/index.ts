@@ -2,7 +2,7 @@ import { existsSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { contextBridge, ipcRenderer, webFrame, type IpcRendererEvent } from 'electron'
 import { IPC } from '../shared/constants'
-import type { EditContextState, KokonaApi, UpdateInfo } from '../shared/api'
+import type { EditContextState, EditMenuEntry, KokonaApi, UpdateInfo } from '../shared/api'
 import type { AppConfig, RuntimeSnapshot, ShellUpdateInfo, WindowState } from '../shared/types'
 
 const api: KokonaApi = {
@@ -23,7 +23,8 @@ const api: KokonaApi = {
   reportTheme: (theme) => ipcRenderer.send(IPC.reportTheme, theme),
   checkShellUpdate: () => ipcRenderer.invoke(IPC.checkShellUpdate) as Promise<ShellUpdateInfo>,
   openExternal: (url) => ipcRenderer.invoke(IPC.openExternal, url) as Promise<void>,
-  showContextMenu: (state) => ipcRenderer.send(IPC.contextMenu, state),
+  editContext: (state) => ipcRenderer.invoke(IPC.editContext, state) as Promise<EditMenuEntry[]>,
+  editAction: (action) => ipcRenderer.send(IPC.editAction, action),
   window: {
     minimize: () => ipcRenderer.send(IPC.windowControl, 'minimize'),
     maximize: () => ipcRenderer.send(IPC.windowControl, 'maximize'),
@@ -1304,9 +1305,141 @@ function describeEditTarget(target: Element): EditContextState | null {
   return null
 }
 
+/**
+ * The menu surface. A native menu cannot be styled at all — the OS paints it — so this is
+ * drawn in the page to get the same frosted material as the bottom dock and the right
+ * panel, by reusing exactly their recipe (the 侧栏 tint over the glass blur). Only the
+ * surface is custom: the actions are still Electron's own.
+ */
+const EDIT_MENU_ID = 'kokona-edit-menu'
+const EDIT_MENU_STYLE_ID = 'kokona-edit-menu-style'
+const EDIT_MENU_STYLE = `
+#${EDIT_MENU_ID} {
+  position: fixed;
+  z-index: 2147483000;
+  min-width: 176px;
+  padding: 4px;
+  margin: 0;
+  border-radius: 10px;
+  border: 1px solid color-mix(in srgb, var(--we-sidebar-color, #ffffff) 26%, transparent);
+  background-color: color-mix(in srgb, var(--we-sidebar-color, #ffffff) var(--we-sidebar-tint, 20%), transparent);
+  backdrop-filter: blur(var(--we-sidebar-blur, 16px)) saturate(var(--we-sidebar-saturate, 1.3)) brightness(var(--we-glass-brightness, 1.04)) contrast(1.01);
+  -webkit-backdrop-filter: blur(var(--we-sidebar-blur, 16px)) saturate(var(--we-sidebar-saturate, 1.3)) brightness(var(--we-glass-brightness, 1.04)) contrast(1.01);
+  box-shadow: 0 12px 32px rgba(0, 0, 0, .28), 0 2px 8px rgba(0, 0, 0, .16);
+  color: inherit;
+  font-size: 13px;
+  line-height: 1;
+  user-select: none;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+#${EDIT_MENU_ID} .kokona-edit-sep {
+  height: 1px;
+  margin: 4px 6px;
+  background-color: color-mix(in srgb, currentColor 18%, transparent);
+}
+#${EDIT_MENU_ID} .kokona-edit-item {
+  display: flex;
+  align-items: center;
+  gap: 18px;
+  width: 100%;
+  padding: 7px 10px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: default;
+}
+#${EDIT_MENU_ID} .kokona-edit-item[data-enabled='true']:hover {
+  background-color: var(--kokona-surface-selected, color-mix(in srgb, currentColor 14%, transparent));
+}
+#${EDIT_MENU_ID} .kokona-edit-item[data-enabled='false'] { opacity: .38; }
+#${EDIT_MENU_ID} .kokona-edit-key { margin-left: auto; opacity: .55; font-size: 12px; }
+`
+
+let editMenuElement: HTMLElement | null = null
+
+function closeEditMenu(): void {
+  if (editMenuElement === null) return
+  editMenuElement.remove()
+  editMenuElement = null
+  document.removeEventListener('pointerdown', closeEditMenuOnOutside, true)
+  document.removeEventListener('keydown', closeEditMenuOnKey, true)
+  document.removeEventListener('scroll', closeEditMenu, true)
+  window.removeEventListener('blur', closeEditMenu)
+  window.removeEventListener('resize', closeEditMenu)
+}
+
+function closeEditMenuOnOutside(event: Event): void {
+  if (event.target instanceof Node && editMenuElement?.contains(event.target) === true) return
+  closeEditMenu()
+}
+
+function closeEditMenuOnKey(event: KeyboardEvent): void {
+  if (event.key === 'Escape') closeEditMenu()
+}
+
+/** Keep the menu inside the window: flip rather than overflow. */
+function placeEditMenu(menu: HTMLElement, x: number, y: number): void {
+  const rect = menu.getBoundingClientRect()
+  const margin = 8
+  menu.style.left = `${Math.max(margin, Math.min(x, window.innerWidth - rect.width - margin))}px`
+  menu.style.top = `${Math.max(margin, Math.min(y, window.innerHeight - rect.height - margin))}px`
+}
+
+function openEditMenu(entries: EditMenuEntry[], x: number, y: number): void {
+  closeEditMenu()
+  const menu = document.createElement('div')
+  menu.id = EDIT_MENU_ID
+  menu.setAttribute('role', 'menu')
+  for (const entry of entries) {
+    if (entry.separated) {
+      const separator = document.createElement('div')
+      separator.className = 'kokona-edit-sep'
+      menu.append(separator)
+    }
+    const item = document.createElement('button')
+    item.type = 'button'
+    item.className = 'kokona-edit-item'
+    item.setAttribute('role', 'menuitem')
+    item.dataset.enabled = String(entry.enabled)
+    item.disabled = !entry.enabled
+    const label = document.createElement('span')
+    label.textContent = entry.label
+    const key = document.createElement('span')
+    key.className = 'kokona-edit-key'
+    key.textContent = entry.accelerator
+    item.append(label, key)
+    // Focus has to stay in the field: the edit actions run on whatever is focused, so a
+    // button that takes focus would send them nowhere.
+    item.addEventListener('mousedown', (event) => event.preventDefault())
+    item.addEventListener('click', () => {
+      closeEditMenu()
+      if (entry.enabled) api.editAction(entry.action)
+    })
+    menu.append(item)
+  }
+  menu.addEventListener('mousedown', (event) => event.preventDefault())
+  document.body.append(menu)
+  editMenuElement = menu
+  placeEditMenu(menu, x, y)
+  document.addEventListener('pointerdown', closeEditMenuOnOutside, true)
+  document.addEventListener('keydown', closeEditMenuOnKey, true)
+  document.addEventListener('scroll', closeEditMenu, true)
+  window.addEventListener('blur', closeEditMenu)
+  window.addEventListener('resize', closeEditMenu)
+}
+
 function installEditContextMenu(): void {
   if (document.documentElement.hasAttribute(EDIT_MENU_ATTR)) return
   document.documentElement.setAttribute(EDIT_MENU_ATTR, '')
+  const style = document.createElement('style')
+  style.id = EDIT_MENU_STYLE_ID
+  style.textContent = EDIT_MENU_STYLE
+  document.head.append(style)
   // Capture phase: read the selection before any page handler can change it.
   document.addEventListener(
     'contextmenu',
@@ -1315,12 +1448,21 @@ function installEditContextMenu(): void {
       if (target === null) return
       const state = describeEditTarget(target)
       if (state === null) return
+      // Claim the gesture synchronously, before the await below can lose the turn.
+      event.preventDefault()
+      const x = event.clientX
+      const y = event.clientY
       // Right-clicking a field should put the caret where the click landed, which is what
-      // the edit roles act on.
+      // the edit actions act on.
       const entry = target.closest('input, textarea, [contenteditable]')
       if (entry instanceof HTMLElement) entry.focus()
-      event.preventDefault()
-      api.showContextMenu(state)
+      // The clipboard can only be read in the main process, so the entries are built there.
+      void api
+        .editContext(state)
+        .then((entries) => openEditMenu(entries, x, y))
+        .catch(() => {
+          // No menu is better than a broken one.
+        })
     },
     true
   )

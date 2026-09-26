@@ -1,7 +1,7 @@
 import { statSync } from 'node:fs'
-import { app, BrowserWindow, clipboard, ipcMain, Menu, shell as electronShell, type MenuItemConstructorOptions } from 'electron'
+import { app, BrowserWindow, clipboard, ipcMain, shell as electronShell } from 'electron'
 import { IPC, type WindowAction } from '../shared/constants'
-import type { EditContextState } from '../shared/api'
+import type { EditAction, EditContextState, EditMenuEntry } from '../shared/api'
 import type { AppConfig } from '../shared/types'
 import { loadConfig, saveConfig } from './config'
 import { userDataDir } from './paths'
@@ -58,17 +58,6 @@ const EDIT_LABELS = {
   en: { cut: 'Cut', copy: 'Copy', paste: 'Paste', selectAll: 'Select All' }
 } as const
 
-function editLabel(key: keyof (typeof EDIT_LABELS)['en']): string {
-  const locale = (app.getLocale() ?? '').toLowerCase()
-  return locale.startsWith('zh') ? EDIT_LABELS.zh[key] : EDIT_LABELS.en[key]
-}
-
-/**
- * A Menu that is collected while it is still open can take the window down with it, so
- * the live popup is held here until the next one replaces it.
- */
-let openEditMenu: Menu | null = null
-
 function normalizeEditContext(value: unknown): EditContextState {
   const source = (value ?? {}) as Record<string, unknown>
   return {
@@ -79,67 +68,89 @@ function normalizeEditContext(value: unknown): EditContextState {
 }
 
 /**
- * The menu for one right-click, as a pure function of what the click landed on and what
- * is on the clipboard. Kept separate from the popup so the enablement rules can be
- * checked without a window.
+ * The menu for one right-click, as a pure function of what the click landed on, what is on
+ * the clipboard, and the locale. Pure so the enablement rules can be checked without a
+ * window and without a page.
  *
  * Enablement follows what the click actually landed on. Cut and copy need a selection,
  * paste needs a writable field and a clipboard that is not empty, and select-all needs
  * something to select. An empty field with an empty clipboard therefore shows the menu
  * with every entry greyed rather than offering operations that would do nothing.
  *
- * Accelerators are spelled out rather than left to the role: a role does not bring its
- * own, so without them the popup shows no key hints at all. On a popup menu they are
- * display-only — they do not register anything application-wide.
+ * The key hints are spelled out because nothing supplies them for free, and they are
+ * display-only: this menu registers no shortcuts.
  */
-export function editMenuTemplate(
+export function editMenuEntries(
   state: EditContextState,
-  clipboardText: string
-): MenuItemConstructorOptions[] {
-  const canPaste = state.editable && clipboardText !== ''
+  hasClipboardText: boolean,
+  locale: string,
+  platform: NodeJS.Platform
+): EditMenuEntry[] {
+  const zh = locale.toLowerCase().startsWith('zh')
+  const label = (key: keyof (typeof EDIT_LABELS)['en']): string =>
+    zh ? EDIT_LABELS.zh[key] : EDIT_LABELS.en[key]
+  const mod = platform === 'darwin' ? '⌘' : 'Ctrl+'
+  const canPaste = state.editable && hasClipboardText
+
   if (!state.editable) {
     // Read-only, or not writable at all: offer only what still means something.
     return [
-      { role: 'copy', label: editLabel('copy'), accelerator: 'CommandOrControl+C', enabled: state.hasSelection },
-      { type: 'separator' },
       {
-        role: 'selectAll',
-        label: editLabel('selectAll'),
-        accelerator: 'CommandOrControl+A',
-        enabled: state.hasContent || state.hasSelection
+        action: 'copy',
+        label: label('copy'),
+        accelerator: `${mod}C`,
+        enabled: state.hasSelection,
+        separated: false
+      },
+      {
+        action: 'selectAll',
+        label: label('selectAll'),
+        accelerator: `${mod}A`,
+        enabled: state.hasContent || state.hasSelection,
+        separated: true
       }
     ]
   }
+
   return [
-    { role: 'cut', label: editLabel('cut'), accelerator: 'CommandOrControl+X', enabled: state.hasSelection },
-    { role: 'copy', label: editLabel('copy'), accelerator: 'CommandOrControl+C', enabled: state.hasSelection },
-    { role: 'paste', label: editLabel('paste'), accelerator: 'CommandOrControl+V', enabled: canPaste },
-    { type: 'separator' },
-    {
-      role: 'selectAll',
-      label: editLabel('selectAll'),
-      accelerator: 'CommandOrControl+A',
-      enabled: state.hasContent
-    }
+    { action: 'cut', label: label('cut'), accelerator: `${mod}X`, enabled: state.hasSelection, separated: false },
+    { action: 'copy', label: label('copy'), accelerator: `${mod}C`, enabled: state.hasSelection, separated: false },
+    { action: 'paste', label: label('paste'), accelerator: `${mod}V`, enabled: canPaste, separated: false },
+    { action: 'selectAll', label: label('selectAll'), accelerator: `${mod}A`, enabled: state.hasContent, separated: true }
   ]
 }
 
-/**
- * The composer has no context menu because Electron ships no default one: a right-click
- * on a text field lands on nothing at all. Build a native menu and let Electron's own
- * roles perform the edit — they act on the focused webContents, so they stay correct for
- * plain fields and rich-text surfaces alike, and they go through the field's own undo
- * history instead of rewriting its value behind its back.
- */
-function showEditContextMenu(window: BrowserWindow, state: EditContextState): void {
-  openEditMenu = Menu.buildFromTemplate(editMenuTemplate(state, clipboard.readText()))
-  openEditMenu.popup({ window })
-}
-
 export function registerIpc(shell: Shell): void {
-  ipcMain.on(IPC.contextMenu, (event, state: unknown) => {
-    const window = BrowserWindow.fromWebContents(event.sender)
-    if (window) showEditContextMenu(window, normalizeEditContext(state))
+  ipcMain.handle(IPC.editContext, (_event, state: unknown) =>
+    editMenuEntries(
+      normalizeEditContext(state),
+      clipboard.readText() !== '',
+      app.getLocale() ?? '',
+      process.platform
+    )
+  )
+  // The actions are Electron's own rather than reimplemented: they run on whatever the
+  // focused element is, go through that element's own undo history, and keep the
+  // platform's conventions. The page keeps focus in the field, so they land where the
+  // click did.
+  ipcMain.on(IPC.editAction, (event, action: unknown) => {
+    const contents = event.sender
+    switch (action as EditAction) {
+      case 'cut':
+        contents.cut()
+        break
+      case 'copy':
+        contents.copy()
+        break
+      case 'paste':
+        contents.paste()
+        break
+      case 'selectAll':
+        contents.selectAll()
+        break
+      default:
+        break
+    }
   })
   ipcMain.handle(IPC.snapshot, () => shell.snapshot())
   ipcMain.handle(IPC.getConfig, () => loadConfig())

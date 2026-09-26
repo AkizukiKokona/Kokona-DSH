@@ -1060,14 +1060,30 @@ GitHub Actions 会设 `CI=true`，脚本第一步就退出。
 **现象**：对着输入框右键**毫无反应**。原因不在 DSH —— **Electron 默认不提供任何右键菜单**，
 `contextmenu` 没人处理，所以点上去就是没有。社区封装大多也没补，所以到哪都这样。
 
-**做法**：用**原生菜单**，动作交给 Electron 自己的 `role`，外壳只负责判断状态。
+**做法**：菜单**画在页面里**，动作仍然是 Electron 自己的。
 
+**为什么不是原生菜单**：第一版用的是 `Menu.buildFromTemplate(...).popup()` + `role`，功能完全正常 ——
+但**原生菜单由操作系统绘制，Electron 完全控制不了外观**：没有透明度、没有圆角、没有
+backdrop-filter 接口。要跟底栏/右栏一样是毛玻璃就只能自绘，于是换成了 DOM 菜单，
+并复用**同一套**参数：
+
+```css
+background-color: color-mix(in srgb, var(--we-sidebar-color, #ffffff) var(--we-sidebar-tint, 20%), transparent);
+backdrop-filter: blur(var(--we-sidebar-blur, 16px)) saturate(var(--we-sidebar-saturate, 1.3))
+                  brightness(var(--we-glass-brightness, 1.04)) contrast(1.01);
+```
+
+**分工**：
 - `src/preload/index.ts` —— 文档级 `contextmenu` 监听（**捕获阶段**，趁页面还没动选区），判断这次
-  点到了什么，把 `{ editable, hasSelection, hasContent }` 发给主进程。渲染层**不画菜单**，
-  也画不了：只有主进程能读剪贴板。
-- `src/main/ipc.ts` —— `editMenuTemplate(state, clipboardText)` 是**纯函数**，返回菜单模板；
-  `Menu.buildFromTemplate(...).popup({ window })` 弹出。role 作用在**获得焦点的 webContents** 上，
-  所以普通输入框和 contenteditable 都对，而且走控件自己的撤销栈，不是背后改值。
+  点到了什么，把 `{ editable, hasSelection, hasContent }` 发给主进程；主进程回一组菜单条目，
+  渲染层只负责**画**。
+- `src/main/ipc.ts` —— `editMenuEntries(state, hasClipboardText, locale, platform)` 是**纯函数**：
+  有哪些条目、哪些可用、标签和加速键写什么，全在这里决定。剪贴板只有主进程能读，所以判断都在这一侧。
+- 点击后走 `IPC.editAction` → `webContents.cut()/copy()/paste()/selectAll()` —— **不是自己实现**，
+  所以行为、撤销栈、平台习惯和原生一致。
+
+**焦点是这个方案的命门**：那些动作作用在**当前获得焦点的元素**上。菜单项是 `<button>`，
+点它会把焦点从输入框抢走 —— 所以 `mousedown` 上 `preventDefault()`，让焦点始终留在输入框里。
 
 **状态逻辑**：
 
@@ -1087,28 +1103,37 @@ GitHub Actions 会设 `CI=true`，脚本第一步就退出。
 **刻意的取舍**：只在**文本输入**和**contenteditable** 上接管手势，其它地方一律不碰 ——
 插件自己给消息加的右键菜单不会被抢。选中正文想复制，那是插件的活，不是外壳的。
 
-**标签和加速键**：`role` **不会**自带加速键 —— 实测 `accelerator` 是空的，菜单上没有任何按键提示，
-所以显式写了 `CommandOrControl+X/C/V/A`。弹出菜单里的加速键只是**显示**用，不会注册成全局快捷键。
-标签按 `app.getLocale()` 走 zh/en 小表，不依赖 role 的默认文案（实测 zh-CN 出的是 剪切/复制/粘贴/全选）。
+**标签和加速键**：加速键是显式给的（win32 上 `Ctrl+X/C/V/A`，macOS 上 `⌘X/C/V/A`，按
+`process.platform` 选），它们只是**显示**用，不注册任何快捷键。标签按 `app.getLocale()` 走
+zh/en 小表（实测 zh-CN 出 剪切/复制/粘贴/全选，en-US 出 Cut/Copy/Paste/Select All）。
 
 **其它细节**：`NON_TEXT_INPUTS` 排除掉 `number`/`date`/`file` 这些选区 API 会抛错的类型；
-`isContentEditable` 而不是裸的 `[contenteditable]`，否则 `contenteditable="false"` 会被误判；
-弹出的 `Menu` 存在模块级变量里 —— 被 GC 掉的菜单可能把窗口一起带走。
+`isContentEditable` 而不是裸的 `[contenteditable]`，否则 `contenteditable="false"` 会被误判。
+菜单挂在 `document.body` 上、`position: fixed`、`z-index: 2147483000`，样式是**独立注入**的
+`<style>`（不动那一大坨外壳 CSS）；收起靠 `pointerdown`（点外面）/ `Escape` / `scroll` / `blur` /
+`resize`，定位会**翻转**以免出屏。菜单是 `contextmenu` 里 `await` 到条目才画的 —— 剪贴板状态得问
+主进程，所以 `preventDefault()` 必须在 `await` **之前**同步调用。
 
-**验证**：`npm run typecheck` / `npm run build` 通过。`editMenuTemplate` 写成了**纯函数**，
-所以另外用 esbuild 单独打包它、在真实 Electron 进程里跑了 7 组状态，逐项核对 `enabled`：
+**验证**：`npm run typecheck` / `npm run build` 通过。`editMenuEntries` 是**纯函数**，所以另外用
+esbuild 单独打包它、在真实 Electron 进程里跑了 7 组状态 × locale/platform，逐项核对：
 
 ```
-writable / selection / clipboard / content   cut:on   copy:on   paste:on   ---  selectall:on
-writable / selection / EMPTY clipboard       cut:on   copy:on   paste:OFF  ---  selectall:on
-writable / no selection / clipboard          cut:OFF  copy:OFF  paste:on   ---  selectall:on
-writable / no selection / empty clip         cut:OFF  copy:OFF  paste:OFF  ---  selectall:on
-writable / EMPTY field / EMPTY clipboard     cut:OFF  copy:OFF  paste:OFF  ---  selectall:OFF
-read-only / no selection / content           copy:OFF  ---  selectall:on
-read-only / selection                        copy:on   ---  selectall:on
+zh-CN / win32
+  writable / selection / clipboard / content 剪切:on   复制:on   粘贴:on   | 全选:on
+  writable / selection / EMPTY clipboard     剪切:on   复制:on   粘贴:OFF  | 全选:on
+  writable / no selection / clipboard        剪切:OFF  复制:OFF  粘贴:on   | 全选:on
+  writable / no selection / empty clip       剪切:OFF  复制:OFF  粘贴:OFF  | 全选:on
+  writable / EMPTY field / EMPTY clipboard   剪切:OFF  复制:OFF  粘贴:OFF  | 全选:OFF
+  read-only / no selection / content         复制:OFF  | 全选:on
+  read-only / selection                      复制:on   | 全选:on
+
+accelerators by locale / platform
+  zh-CN / win32         剪切[Ctrl+X] 复制[Ctrl+C] 粘贴[Ctrl+V] 全选[Ctrl+A]
+  en-US / win32         Cut[Ctrl+X] Copy[Ctrl+C] Paste[Ctrl+V] Select All[Ctrl+A]
+  en-US / darwin        Cut[⌘X] Copy[⌘C] Paste[⌘V] Select All[⌘A]
 ```
 
-加速键缺失正是这一轮实测发现的，不是读代码读出来的。
+（`|` 标的是分隔线位置。）第一版原生菜单的加速键缺失也是这么测出来的，不是读代码读出来的。
 
 **坑**：electron-vite 把主进程打成**单个** `out/main/index.js`，**没有** `out/main/ipc.js` ——
 想单独 `require` 一个主进程模块做不到（第一次探针就卡死在这：require 抛异常 → `whenReady`
