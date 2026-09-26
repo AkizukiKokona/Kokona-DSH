@@ -44,6 +44,16 @@ body{margin:0;font:14px system-ui}
   <p id="err">Error: cannot modify "D:\\kokonadsh\\src\\shared\\constants.ts": file has not been read — read the file, then retry</p>
   <textarea id="field" rows="3"></textarea>
   <div class="X_card" id="hovercard"><div class="X_preview"><span data-diff-note="metadata">meta</span><span data-diff-hunk-header>@@ -1 +1 @@</span><span>changed line</span></div></div>
+  <div class="Y0dWHa_schema" id="schemapanel">
+    <div class="Y0dWHa_schemaIntro">
+      <span class="Y0dWHa_schemaName">todo_write</span>
+      <div class="Y0dWHa_schemaDescription">Record and update the task list.</div>
+    </div>
+    <div class="Y0dWHa_schemaParameters">
+      <div class="Y0dWHa_schemaParametersTitle">Parameters</div>
+      <pre class="Y0dWHa_schemaTree">{"type":"object"}</pre>
+    </div>
+  </div>
 </div>
 </body></html>`
 
@@ -111,7 +121,11 @@ async function main() {
       bannerBg: banner ? getComputedStyle(banner).backgroundColor : null,
       bannerBackdrop: banner ? (getComputedStyle(banner).backdropFilter || '-') : null,
       hoverCardBg: (() => { const c = document.getElementById('hovercard'); return c ? getComputedStyle(c).backgroundColor : null; })(),
-      hoverPreviewBg: (() => { const p = document.querySelector('#hovercard .X_preview'); return p ? getComputedStyle(p).backgroundColor : null; })()
+      hoverPreviewBg: (() => { const p = document.querySelector('#hovercard .X_preview'); return p ? getComputedStyle(p).backgroundColor : null; })(),
+      // schema panel: Chinese first, the parameter tree untouched in the middle, English last
+      schemaOrder: (() => { const p = document.getElementById('schemapanel'); return p === null ? null : Array.from(p.children).map((c) => String(c.className).replace(/^Y0dWHa_/, '')).join(' > '); })(),
+      schemaZh: (() => { const z = document.querySelector('#schemapanel [data-kokona-schema-zh]'); return z === null ? null : z.textContent; })(),
+      schemaZhInIntro: (() => { const i = document.querySelector('#schemapanel [class$="_schemaIntro"]'); return i === null ? null : i.querySelector('[data-kokona-schema-zh]') !== null; })()
     }
   })()`)
   lines.push('A. 报错下方注释 + 压缩行底色')
@@ -124,6 +138,37 @@ async function main() {
   lines.push(`   banner bg / blur : ${a.bannerBg} / ${a.bannerBackdrop}`)
   lines.push(`   hover card bg    : ${a.hoverCardBg}   (must be rgba(255, 255, 255, 0.85))`)
   lines.push(`   hover preview bg : ${a.hoverPreviewBg}   (same)`)
+  lines.push(`   schema order     : ${a.schemaOrder}`)
+  lines.push(`                      (must be schemaIntro > schemaParameters > schemaDescription)`)
+  lines.push(`   schema zh        : ${a.schemaZh}`)
+  lines.push(`   schema zh in intro: ${a.schemaZhInIntro}   (must be true - right after the tool name)`)
+
+  // A2: outside Simplified Chinese the panel must be left exactly as the core rendered it.
+  const a2 = await win.webContents.executeJavaScript(`(async () => {
+    const panel = document.getElementById('schemapanel')
+    const intro = panel.querySelector('[class$="_schemaIntro"]')
+    // The Chinese line deliberately carries the description's class so it inherits the
+    // typography, which means a plain querySelector can hand back the line instead of the
+    // core's own element. Pick the one without the marker.
+    const desc = Array.from(panel.querySelectorAll('[class$="_schemaDescription"]'))
+      .find((el) => !el.hasAttribute('data-kokona-schema-zh'))
+    for (const stale of Array.from(panel.querySelectorAll('[data-kokona-schema-zh]'))) stale.remove()
+    intro.append(desc)
+    document.documentElement.lang = 'en'
+    await new Promise((r) => setTimeout(r, 1000))
+    return {
+      englishStillInIntro: panel.lastElementChild !== desc,
+      chineseInserted: panel.querySelector('[data-kokona-schema-zh]') !== null,
+      htmlLang: document.documentElement.lang,
+      navLang: navigator.language,
+      zhNodes: panel.querySelectorAll('[data-kokona-schema-zh]').length
+    }
+  })()`)
+  lines.push('A2. 非简体中文下必须不动（lang=en）')
+  lines.push(`   english back in intro : ${a2.englishStillInIntro}   (must be true - not moved to the bottom)`)
+  lines.push(`   chinese inserted      : ${a2.chineseInserted}   (must be false)`)
+  lines.push(`   htmlLang / navigator  : ${a2.htmlLang} / ${a2.navLang}`)
+  lines.push(`   zh node count         : ${a2.zhNodes}`)
 
   // B: right-click a textarea.
   const b = await win.webContents.executeJavaScript(`(async () => {
