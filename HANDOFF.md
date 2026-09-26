@@ -1152,6 +1152,42 @@ accelerators by locale / platform
 回调 reject → 既不写结果也不退出）。要单测主进程模块，得用 esbuild 单独打包一个入口，
 并且给探针加超时兜底。
 
+## 26. 给「文件没观测」的报错补一条说明
+
+**背景**：核心有个防盲改策略 —— 编辑一个它没「观测」过的文件会被拒绝，报
+`cannot modify "<path>": file has not been read — read the file, then retry`（错误码 `FS_NOT_OBSERVED`）。
+
+**但这句话经常是假话。** 观测表在**核心进程的内存里**：
+
+- `dsh-fs-observation-policy/lib/index.js` —— `owner(actor) { return actor?.agent?.session }`，
+  状态存在 `WeakMap` 里；`editIntent()` 查不到记录就抛 `FS_NOT_OBSERVED`。
+- `apply(ctx)` 每次加载都 **new** 一个 `ObservedStateGate`，`ctx.effect` 的 teardown 里 `clear()`。
+  源码注释原话：*"One instance is created per `apply()` so disposal can drop all state for HMR."*
+
+所以记录的寿命 = **一次插件加载**。核心进程一重启（或插件热重载），全部观测归零 ——
+**重启前刚读过的文件也会报「没读过」**。同一机制还有个连带效果：`writeIntent` 对未观测目标是
+`createIfAbsent` 而不是覆盖，所以重启后 `write` 一个已存在的文件同样会被挡到重读为止（有意的防覆盖）。
+
+**核心不能改**（AGENTS.md 第一条），所以壳在旁边补一条说明。
+
+**做法**：`src/preload/index.ts` 的 `installFsObservationHint()`，挂在 `tick()` 里
+（和 brand / hero / open-in-app 同一个 mutation + 600ms 轮询）。
+
+- 在 `[data-conversation-scroll]` 里用 `TreeWalker` 找含 `file has not been read` 的**文本节点** ——
+  报错是拼好的一个字符串，所以落下来就是一个文本节点；这个容器是源码里写死的 `data-*`，不是哈希类名。
+- 命中就在该节点所在元素的**后面**插一条提示（`data-kokona-fs-hint`），源元素打
+  `data-kokona-fs-hinted` 防重复。
+- 提示样式是**内联**的，颜色取 `currentColor` + `color-mix`，所以自动跟随主题，不用额外样式表。
+- 每次 tick 先清一遍**孤儿提示**（源元素被 React 重渲染换掉 → 提示的 `previousElementSibling`
+  不再是带标记的元素）→ 自愈，不会堆出重复。
+- 全量走文本节点有成本，所以**限流 2 秒**一次；这个延迟看不出来。
+
+**没验证的部分**：检测依赖「报错在页面上是一个纯文本节点」。这一点是**推断**的（错误由模板字符串拼出），
+没有真在页面上确认。如果实际渲染把文字拆开了，或者根本不显示这段文本，就得换锚点。
+
+**验证**：`npm run typecheck` / `npm run build` 通过。真机确认需要**重启核心**，然后让 agent 去编辑
+一个重启前读过的文件 —— 报错下面应该出现那条提示。
+
 
 
 

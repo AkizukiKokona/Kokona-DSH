@@ -1522,6 +1522,75 @@ function installEditContextMenu(): void {
   )
 }
 
+/**
+ * The core refuses to edit a file it has not observed, and its message says the file "has
+ * not been read" — which is frequently not true.
+ *
+ * The observation table lives in the core's memory: dsh-fs-observation-policy keys it by
+ * session in a WeakMap, and the gate is rebuilt every time the plugin is applied, so a core
+ * restart or a plugin reload empties it. Files that were read minutes earlier then fail as
+ * if they had never been opened. The remedy is the same either way — read the file again —
+ * but the wording blames the model instead of the restart, which sends anyone debugging it
+ * the wrong way.
+ *
+ * The core is never patched, so the correction rides next to the error instead. Detection
+ * is by the message text, because the error renders as a plain string with no stable hook
+ * of its own.
+ */
+const FS_HINT_ATTR = 'data-kokona-fs-hint'
+const FS_HINTED_ATTR = 'data-kokona-fs-hinted'
+const FS_HINT_NEEDLE = 'file has not been read'
+const FS_HINT_MESSAGE =
+  '这个报错未必是真的「没读过」。文件观测记录只存在核心进程的内存里，核心重启或插件重载后会清空，所以重启前读过的文件也会报这个。重读一次该文件再试即可。'
+
+/** Re-walk the transcript at most this often: a long conversation has a lot of text nodes. */
+const FS_HINT_INTERVAL_MS = 2000
+let fsHintCheckedAt = 0
+
+function buildFsHint(): HTMLElement {
+  const hint = document.createElement('div')
+  hint.setAttribute(FS_HINT_ATTR, '')
+  hint.textContent = FS_HINT_MESSAGE
+  // Inline and derived from currentColor, so it follows the theme without a stylesheet.
+  hint.style.cssText = [
+    'margin: 6px 0 2px',
+    'padding: 6px 10px',
+    'border-radius: 8px',
+    'border: 1px solid color-mix(in srgb, currentColor 18%, transparent)',
+    'background-color: color-mix(in srgb, currentColor 8%, transparent)',
+    'font-size: 12px',
+    'line-height: 1.5',
+    'opacity: .85',
+    'user-select: text'
+  ].join('; ')
+  return hint
+}
+
+function installFsObservationHint(): void {
+  const transcript = document.querySelector('[data-conversation-scroll]')
+  if (!(transcript instanceof HTMLElement)) return
+
+  // A hint whose source element is gone was orphaned by a re-render. Drop it, so the scan
+  // below can place a fresh one rather than leaving a copy behind.
+  for (const stale of Array.from(transcript.querySelectorAll(`[${FS_HINT_ATTR}]`))) {
+    if (stale.previousElementSibling?.hasAttribute(FS_HINTED_ATTR) === true) continue
+    stale.remove()
+  }
+
+  const now = Date.now()
+  if (now - fsHintCheckedAt < FS_HINT_INTERVAL_MS) return
+  fsHintCheckedAt = now
+
+  const walker = document.createTreeWalker(transcript, NodeFilter.SHOW_TEXT)
+  for (let node = walker.nextNode(); node !== null; node = walker.nextNode()) {
+    if ((node.nodeValue ?? '').includes(FS_HINT_NEEDLE) === false) continue
+    const owner = node.parentElement
+    if (owner === null || owner.hasAttribute(FS_HINTED_ATTR)) continue
+    owner.setAttribute(FS_HINTED_ATTR, '')
+    owner.insertAdjacentElement('afterend', buildFsHint())
+  }
+}
+
 async function bootstrap(): Promise<void> {
   if (!isDshPage()) return
   const start = () => {
@@ -1535,14 +1604,15 @@ async function bootstrap(): Promise<void> {
     // re-render, so it stays out of the mutation tick below.
     installEditContextMenu()
     // One tick for the things that must survive React re-renders: the right panel
-    // sweep, the brand lockup, the hero copy and the open-in-app hook. Each is
-    // guarded by its own cheap check, so a tick after the work is done is a couple
-    // of reads.
+    // sweep, the brand lockup, the hero copy, the open-in-app hook and the note
+    // beside an unobserved-file error. Each is guarded by its own cheap check, so a
+    // tick after the work is done is a couple of reads.
     const tick = (): void => {
       syncRightPanel()
       installBrand()
       installHeroCopy()
       installOpenInAppFix()
+      installFsObservationHint()
     }
     tick()
     new MutationObserver(tick).observe(document.documentElement, { childList: true, subtree: true })
