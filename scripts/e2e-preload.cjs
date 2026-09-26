@@ -145,7 +145,11 @@ async function main() {
       // schema panel: Chinese first, the parameter tree untouched in the middle, English last
       schemaOrder: (() => { const p = document.getElementById('schemapanel'); return p === null ? null : Array.from(p.children).map((c) => String(c.className).replace(/^Y0dWHa_/, '')).join(' > '); })(),
       schemaZh: (() => { const z = document.querySelector('#schemapanel [data-kokona-schema-zh]'); return z === null ? null : z.textContent; })(),
-      schemaZhInIntro: (() => { const i = document.querySelector('#schemapanel [class$="_schemaIntro"]'); return i === null ? null : i.querySelector('[data-kokona-schema-zh]') !== null; })()
+      schemaZhInIntro: (() => { const i = document.querySelector('#schemapanel [class$="_schemaIntro"]'); return i === null ? null : i.querySelector('[data-kokona-schema-zh]') !== null; })(),
+      schemaTitleZh: (() => { const t = document.querySelector('#schemapanel [class$="_schemaParametersTitle"]'); return t === null ? null : t.textContent; })(),
+      schemaLabel: (() => { const l = Array.from(document.querySelectorAll('#schemapanel [data-kokona-schema-zh]')).find((n) => n.textContent === '（英语原文）'); return l === null || l === undefined ? null : l.textContent; })(),
+      schemaLabelStyle: (() => { const l = Array.from(document.querySelectorAll('#schemapanel [data-kokona-schema-zh]')).find((n) => n.textContent === '（英语原文）'); if (l === null || l === undefined) return null; const s = getComputedStyle(l); return s.fontWeight + ' / ' + s.color; })(),
+      schemaEnglishPad: (() => { const d = Array.from(document.querySelectorAll('#schemapanel [class$="_schemaDescription"]')).find((n) => !n.hasAttribute('data-kokona-schema-zh')); return d === null || d === undefined ? null : getComputedStyle(d).paddingLeft; })()
     }
   })()`)
   lines.push('A. 报错下方注释 + 压缩行底色')
@@ -165,7 +169,12 @@ async function main() {
   lines.push(`   diff added line  : ${a.diffLineBg}   (must NOT be the menu surface - _add collides with the diff row)`)
   lines.push(`   diff +n gutter   : ${a.diffNumberBg}   (must NOT be the menu surface either)`)
   lines.push(`   schema order     : ${a.schemaOrder}`)
-  lines.push(`                      (must be schemaIntro > schemaParameters > schemaDescription)`)
+  lines.push(`   schema title zh  : ${a.schemaTitleZh}   (must be 参数, was Parameters)`)
+  lines.push(`   english label    : ${a.schemaLabel}   (must be （英语原文）, bold black, above the English)`)
+  lines.push(`   english label fx : ${a.schemaLabelStyle}`)
+  lines.push(`   english padding  : ${a.schemaEnglishPad}   (must be 14px - it lost the intro's inset when moved)`)
+  lines.push(`                      (must be schemaIntro > schemaParameters >  > schemaDescription)`)
+  lines.push(`                      the empty segment is the （英语原文） label - it has no class of its own)`)
   lines.push(`   schema zh        : ${a.schemaZh}`)
   lines.push(`   schema zh in intro: ${a.schemaZhInIntro}   (must be true - right after the tool name)`)
 

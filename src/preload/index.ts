@@ -1861,11 +1861,29 @@ function installSchemaChinese(): void {
     line.className = node.className
     line.textContent = zh
 
+    // The parameter tree's heading is English as well, and it is the one word a reader hits
+    // before the spec itself, so it gets translated too.
+    const title = panel.querySelector('[class$="_schemaParametersTitle"]')
+    if (title instanceof HTMLElement) title.textContent = '参数'
+
+    // The English block gets a label of its own, between the parameter tree and itself.
+    const label = document.createElement('div')
+    label.setAttribute(SCHEMA_ZH_ATTR, '')
+    label.textContent = '（英语原文）'
+    label.style.cssText =
+      'padding:4px 14px 2px;font-weight:600;color:var(--dsw-alias-label-primary);user-select:none;'
+
+    // The description only carried the panel's 14px inset from the intro's padding, which it
+    // loses the moment it is moved out of the intro to sit below the parameter tree - that is
+    // why the English read flush left while the heading and the Chinese line were inset.
+    node.style.paddingLeft = '14px'
+    node.style.paddingRight = '14px'
+
     // Into the intro, so it reads straight after the tool name; then the English original is
     // moved past the parameter tree, which is the only other block in the panel.
     const intro = panel.querySelector('[class$="_schemaIntro"]') ?? panel
     intro.append(line)
-    panel.append(node)
+    panel.append(label, node)
   }
 }
 
