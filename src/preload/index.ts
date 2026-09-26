@@ -163,8 +163,8 @@ function ensureShellStyle(theme?: 'dark' | 'light'): void {
 .${MENU_CLASS} button { text-align: left; border: 0; background: transparent; color: var(--dsw-alias-label-primary, #e8e8ee); font: inherit; font-size: 13px; line-height: 18px; padding: 8px 10px; border-radius: 8px; cursor: pointer; -webkit-app-region: no-drag; }
 .${MENU_CLASS} button:hover { background: var(--dsw-alias-interactive-bg-hover, rgba(255,255,255,0.08)); }
 .${MENU_CLASS} button.kokona-danger { color: var(--dsw-alias-state-warning-primary, #f0a020); }
-html:not([data-theme="dark"]):not(:has(body[data-ds-dark-theme])) { --kokona-surface-soft: rgba(245, 246, 247, 0.72); --kokona-surface-glass: rgba(255, 255, 255, 0.72); --kokona-surface-chip: rgba(250, 250, 250, 0.72); --kokona-surface-selected: rgba(255, 255, 255, 0.95); --kokona-surface-float: rgba(255, 255, 255, 0.85); --kokona-surface-menu: rgba(255, 255, 255, 0.94); --kokona-selected-ring: rgba(0, 0, 0, 0.35); }
-html[data-theme="dark"], body[data-ds-dark-theme] { --kokona-surface-soft: rgba(255, 255, 255, 0.07); --kokona-surface-glass: rgba(255, 255, 255, 0.07); --kokona-surface-chip: rgba(255, 255, 255, 0.07); --kokona-surface-selected: rgba(255, 255, 255, 0.16); --kokona-surface-float: rgba(58, 58, 60, 0.85); --kokona-surface-menu: rgba(58, 58, 60, 0.94); --kokona-selected-ring: rgba(255, 255, 255, 0.9); }
+html:not([data-theme="dark"]):not(:has(body[data-ds-dark-theme])) { --kokona-surface-soft: rgba(245, 246, 247, 0.72); --kokona-surface-glass: rgba(255, 255, 255, 0.72); --kokona-surface-chip: rgba(250, 250, 250, 0.72); --kokona-surface-selected: rgba(255, 255, 255, 0.95); --kokona-surface-float: rgba(255, 255, 255, 0.85); --kokona-surface-menu: rgba(255, 255, 255, 0.97); --kokona-selected-ring: rgba(0, 0, 0, 0.35); }
+html[data-theme="dark"], body[data-ds-dark-theme] { --kokona-surface-soft: rgba(255, 255, 255, 0.07); --kokona-surface-glass: rgba(255, 255, 255, 0.07); --kokona-surface-chip: rgba(255, 255, 255, 0.07); --kokona-surface-selected: rgba(255, 255, 255, 0.16); --kokona-surface-float: rgba(58, 58, 60, 0.85); --kokona-surface-menu: rgba(58, 58, 60, 0.97); --kokona-selected-ring: rgba(255, 255, 255, 0.9); }
 html [class*="_panel"]:has([class*="_navList"]) [class*="_rowCard"],
 html [class*="_panel"]:has([class*="_navList"]) [class*="_cards"] > [class*="_card"] { background-color: var(--kokona-surface-glass) !important; }
 html [class*="_panel"]:has([class*="_navList"]) [class*="_selector"],
@@ -179,9 +179,9 @@ html [class*="_panel"]:has([class*="_navList"]) [class*="_themeCube"][aria-press
 [class*="_tools"] [class*="_add"]:not([class*="_add"] *) { background-color: var(--kokona-surface-float) !important; }
 /* The composer's add menu (dsh-client-ui-commands) declares no background and no
    backdrop-filter at all - it is a shadow over whatever sits behind it, which is why its rows
-   were unreadable. It gets the menu surface, a step more opaque than the floating one so the
-   text sits on real ground. Anchored on _labelText together with _viewport, which only this
-   card has. */
+   were unreadable. It gets the menu surface, a near-white that matches how solid the trajectory
+   schema panel's 参数 row reads, since that is the weight YG pointed at. Anchored on _labelText
+   together with _viewport, which only this card has. */
 [class*="_card"]:has([class*="_labelText"]):has([class*="_viewport"]) {
   background-color: var(--kokona-surface-menu) !important;
   backdrop-filter: blur(calc(var(--we-blur, 16px) * 1.8)) saturate(calc(var(--we-saturate, 1.8) * 1.15)) brightness(1.03) !important;
