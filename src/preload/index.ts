@@ -1523,8 +1523,9 @@ function installEditContextMenu(): void {
 }
 
 /**
- * The core refuses to edit a file it has not observed, and its message says the file "has
- * not been read" — which is frequently not true.
+ * The core's tool errors arrive in English whatever the display language is, and one of
+ * them is also misleading: it refuses to edit a file it has not observed and reports that
+ * the file "has not been read", which is frequently not true.
  *
  * The observation table lives in the core's memory: dsh-fs-observation-policy keys it by
  * session in a WeakMap, and the gate is rebuilt every time the plugin is applied, so a core
@@ -1533,12 +1534,13 @@ function installEditContextMenu(): void {
  * but the wording blames the model instead of the restart, which sends anyone debugging it
  * the wrong way.
  *
- * The core is never patched, so the correction rides next to the error instead. Detection
- * is by the message text, because the error renders as a plain string with no stable hook
- * of its own.
+ * The core is never patched, so both corrections ride under the error instead: a Chinese
+ * rendering of it, and for the unobserved case a note explaining why the message is
+ * misleading. Detection is by the message text, because the error renders as a plain
+ * string with no stable hook of its own.
  */
-const FS_HINT_ATTR = 'data-kokona-fs-hint'
-const FS_HINTED_ATTR = 'data-kokona-fs-hinted'
+const FS_NOTE_ATTR = 'data-kokona-fs-note'
+const FS_NOTE_SOURCE_ATTR = 'data-kokona-fs-note-source'
 const FS_HINT_NEEDLE = 'file has not been read'
 const FS_HINT_MESSAGE =
   '这个报错未必是真的「没读过」。文件观测记录只存在核心进程的内存里，核心重启或插件重载后会清空，所以重启前读过的文件也会报这个。重读一次该文件再试即可。'
@@ -1547,33 +1549,90 @@ const FS_HINT_MESSAGE =
 const FS_HINT_INTERVAL_MS = 2000
 let fsHintCheckedAt = 0
 
-function buildFsHint(): HTMLElement {
-  const hint = document.createElement('div')
-  hint.setAttribute(FS_HINT_ATTR, '')
-  hint.textContent = FS_HINT_MESSAGE
-  // Inline and derived from currentColor, so it follows the theme without a stylesheet.
-  hint.style.cssText = [
-    'margin: 6px 0 2px',
-    'padding: 6px 10px',
-    'border-radius: 8px',
-    'border: 1px solid color-mix(in srgb, currentColor 18%, transparent)',
-    'background-color: color-mix(in srgb, currentColor 8%, transparent)',
-    'font-size: 12px',
-    'line-height: 1.5',
-    'opacity: .85',
-    'user-select: text'
-  ].join('; ')
-  return hint
+/**
+ * Only shapes that translate completely are listed. A message whose middle is supplied by
+ * the provider would come out half English, which is worse than leaving it alone.
+ */
+const FS_TRANSLATIONS: Array<{ pattern: RegExp; render: (path: string) => string }> = [
+  {
+    pattern: /cannot modify "([^"]+)":\s*file has not been read/,
+    render: (path) => `无法修改「${path}」：该文件尚未被读取 —— 请先读取该文件，然后重试。`
+  },
+  {
+    pattern: /cannot edit "([^"]+)":\s*not found/,
+    render: (path) => `无法编辑「${path}」：文件不存在。`
+  }
+]
+
+/**
+ * Simplified Chinese only. A Traditional reader would get a line they can read but did not
+ * ask for, which is worse than none. `documentElement.lang` wins when the page sets it;
+ * otherwise the renderer's own locale is the display language.
+ */
+function prefersSimplifiedChinese(): boolean {
+  const declared = (document.documentElement.lang || '').trim().toLowerCase()
+  const language = declared === '' ? (navigator.language || '').trim().toLowerCase() : declared
+  return /^zh\b/.test(language) && /hant|tw|hk|mo/.test(language) === false
 }
 
-function installFsObservationHint(): void {
+function translateFsError(original: string): string | null {
+  for (const entry of FS_TRANSLATIONS) {
+    const match = entry.pattern.exec(original)
+    if (match !== null) return entry.render(match[1] ?? '')
+  }
+  return null
+}
+
+const FS_NOTE_LINE_STYLE = 'margin: 6px 0 0; font-size: 12px; line-height: 1.6; opacity: .8; user-select: text'
+
+// Inline and derived from currentColor, so it follows the theme without a stylesheet.
+const FS_NOTE_BOX_STYLE = [
+  'margin: 6px 0 2px',
+  'padding: 6px 10px',
+  'border-radius: 8px',
+  'border: 1px solid color-mix(in srgb, currentColor 18%, transparent)',
+  'background-color: color-mix(in srgb, currentColor 8%, transparent)',
+  'font-size: 12px',
+  'line-height: 1.5',
+  'opacity: .85',
+  'user-select: text'
+].join('; ')
+
+/**
+ * The lines that ride under one core error: its Chinese rendering, and — for the
+ * unobserved-file case — why the message is misleading. Either can be absent; a note with
+ * neither is not inserted at all.
+ */
+function buildFsNote(original: string): HTMLElement | null {
+  const note = document.createElement('div')
+  note.setAttribute(FS_NOTE_ATTR, '')
+
+  const translated = prefersSimplifiedChinese() ? translateFsError(original) : null
+  if (translated !== null) {
+    const line = document.createElement('div')
+    line.textContent = translated
+    line.style.cssText = FS_NOTE_LINE_STYLE
+    note.append(line)
+  }
+
+  if (original.includes(FS_HINT_NEEDLE)) {
+    const hint = document.createElement('div')
+    hint.textContent = FS_HINT_MESSAGE
+    hint.style.cssText = FS_NOTE_BOX_STYLE
+    note.append(hint)
+  }
+
+  return note.childElementCount > 0 ? note : null
+}
+
+function installFsErrorNotes(): void {
   const transcript = document.querySelector('[data-conversation-scroll]')
   if (!(transcript instanceof HTMLElement)) return
 
-  // A hint whose source element is gone was orphaned by a re-render. Drop it, so the scan
+  // A note whose source element is gone was orphaned by a re-render. Drop it, so the scan
   // below can place a fresh one rather than leaving a copy behind.
-  for (const stale of Array.from(transcript.querySelectorAll(`[${FS_HINT_ATTR}]`))) {
-    if (stale.previousElementSibling?.hasAttribute(FS_HINTED_ATTR) === true) continue
+  for (const stale of Array.from(transcript.querySelectorAll(`[${FS_NOTE_ATTR}]`))) {
+    if (stale.previousElementSibling?.hasAttribute(FS_NOTE_SOURCE_ATTR) === true) continue
     stale.remove()
   }
 
@@ -1583,11 +1642,14 @@ function installFsObservationHint(): void {
 
   const walker = document.createTreeWalker(transcript, NodeFilter.SHOW_TEXT)
   for (let node = walker.nextNode(); node !== null; node = walker.nextNode()) {
-    if ((node.nodeValue ?? '').includes(FS_HINT_NEEDLE) === false) continue
+    const text = node.nodeValue ?? ''
+    if (text.includes('cannot modify "') === false && text.includes('cannot edit "') === false) continue
     const owner = node.parentElement
-    if (owner === null || owner.hasAttribute(FS_HINTED_ATTR)) continue
-    owner.setAttribute(FS_HINTED_ATTR, '')
-    owner.insertAdjacentElement('afterend', buildFsHint())
+    if (owner === null || owner.hasAttribute(FS_NOTE_SOURCE_ATTR)) continue
+    const note = buildFsNote(text)
+    if (note === null) continue
+    owner.setAttribute(FS_NOTE_SOURCE_ATTR, '')
+    owner.insertAdjacentElement('afterend', note)
   }
 }
 
@@ -1604,15 +1666,15 @@ async function bootstrap(): Promise<void> {
     // re-render, so it stays out of the mutation tick below.
     installEditContextMenu()
     // One tick for the things that must survive React re-renders: the right panel
-    // sweep, the brand lockup, the hero copy, the open-in-app hook and the note
-    // beside an unobserved-file error. Each is guarded by its own cheap check, so a
-    // tick after the work is done is a couple of reads.
+    // sweep, the brand lockup, the hero copy, the open-in-app hook and the notes under
+    // a core file error. Each is guarded by its own cheap check, so a tick after the
+    // work is done is a couple of reads.
     const tick = (): void => {
       syncRightPanel()
       installBrand()
       installHeroCopy()
       installOpenInAppFix()
-      installFsObservationHint()
+      installFsErrorNotes()
     }
     tick()
     new MutationObserver(tick).observe(document.documentElement, { childList: true, subtree: true })

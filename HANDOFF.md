@@ -1170,23 +1170,38 @@ accelerators by locale / platform
 
 **核心不能改**（AGENTS.md 第一条），所以壳在旁边补一条说明。
 
-**做法**：`src/preload/index.ts` 的 `installFsObservationHint()`，挂在 `tick()` 里
+**做法**：`src/preload/index.ts` 的 `installFsErrorNotes()`，挂在 `tick()` 里
 （和 brand / hero / open-in-app 同一个 mutation + 600ms 轮询）。
 
-- 在 `[data-conversation-scroll]` 里用 `TreeWalker` 找含 `file has not been read` 的**文本节点** ——
-  报错是拼好的一个字符串，所以落下来就是一个文本节点；这个容器是源码里写死的 `data-*`，不是哈希类名。
-- 命中就在该节点所在元素的**后面**插一条提示（`data-kokona-fs-hint`），源元素打
-  `data-kokona-fs-hinted` 防重复。
-- 提示样式是**内联**的，颜色取 `currentColor` + `color-mix`，所以自动跟随主题，不用额外样式表。
-- 每次 tick 先清一遍**孤儿提示**（源元素被 React 重渲染换掉 → 提示的 `previousElementSibling`
+在报错元素**后面**插一个块（`data-kokona-fs-note`），里面最多两行，**从上到下**：
+
+1. **简体中文翻译** —— 只在显示语言是简体中文时给。原文是英文的（不管界面语言是什么），而且带路径，
+   所以是**解析后重组**，不是查表替换：`FS_TRANSLATIONS` 是一张 `{ pattern, render(path) }` 表，
+   正则捕获路径再套模板。只收录**能整句翻完**的形态 —— 中间那段由 provider 提供的消息（如 stale 那条）
+   翻出来是中英混排，比不翻更差，所以不收录。
+2. **那条提示** —— 只在含 `file has not been read` 时给。
+
+判断显示语言：`documentElement.lang` 优先，没有就用 `navigator.language`；只认简体
+（`^zh` 且不含 `hant/tw/hk/mo`）—— 繁体读者拿到一条没要的中文，比不给更糟。
+
+其它细节：
+
+- 在 `[data-conversation-scroll]` 里用 `TreeWalker` 找含 `cannot modify "` / `cannot edit "` 的
+  **文本节点** —— 报错是拼好的一个字符串，所以落下来就是一个文本节点；这个容器是源码里写死的
+  `data-*`，不是哈希类名。
+- 源元素打 `data-kokona-fs-note-source` 防重复；两行都不适用就**不插**。
+- 样式是**内联**的，颜色取 `currentColor` + `color-mix`，所以自动跟随主题，不用额外样式表。
+- 每次 tick 先清一遍**孤儿块**（源元素被 React 重渲染换掉 → 块的 `previousElementSibling`
   不再是带标记的元素）→ 自愈，不会堆出重复。
-- 全量走文本节点有成本，所以**限流 2 秒**一次；这个延迟看不出来。
+- 全量走文本节点有成本，所以**限流 2 秒**一次。
 
 **没验证的部分**：检测依赖「报错在页面上是一个纯文本节点」。这一点是**推断**的（错误由模板字符串拼出），
 没有真在页面上确认。如果实际渲染把文字拆开了，或者根本不显示这段文本，就得换锚点。
 
-**验证**：`npm run typecheck` / `npm run build` 通过。真机确认需要**重启核心**，然后让 agent 去编辑
-一个重启前读过的文件 —— 报错下面应该出现那条提示。
+**验证**：`npm run typecheck` / `npm run build` 通过。翻译的正则另外单独跑过（那个模块在 preload 之外
+没法 import，所以是镜像一份正则跑的）：Windows 全反斜杠路径、带 `Error: ` 前缀、`not found` 都正确捕获；
+stale 那条和无关文本正确地**不**出 note。真机确认需要**重启核心**，然后让 agent 去编辑一个重启前读过的
+文件 —— 报错下面应该是「原文 / 中文 / 提示」三行。
 
 
 
