@@ -62,6 +62,11 @@ body{margin:0;font:14px system-ui}
       <div class="Cm_row"><span class="Cm_label"><span class="Cm_labelText">/compact</span></span><span class="Cm_detail">压缩上下文</span></div>
     </div>
   </div>
+  <div class="Gm_menu" id="addmenu">
+    <div class="Gm_viewport">
+      <div class="Gm_item"><span class="Gm_itemIcon"></span><span class="Gm_itemName">压缩上下文</span><span class="Gm_itemDescription">把历史压成摘要</span></div>
+    </div>
+  </div>
 </div>
 </body></html>`
 
@@ -132,6 +137,8 @@ async function main() {
       hoverPreviewBg: (() => { const p = document.querySelector('#hovercard .X_preview'); return p ? getComputedStyle(p).backgroundColor : null; })(),
       cmdMenuBg: (() => { const m = document.getElementById('cmdmenu'); return m ? getComputedStyle(m).backgroundColor : null; })(),
       cmdMenuBlur: (() => { const m = document.getElementById('cmdmenu'); return m ? (getComputedStyle(m).backdropFilter || '-') : null; })(),
+      addMenuBg: (() => { const m = document.getElementById('addmenu'); return m ? getComputedStyle(m).backgroundColor : null; })(),
+      addMenuBlur: (() => { const m = document.getElementById('addmenu'); return m ? (getComputedStyle(m).backdropFilter || '-') : null; })(),
       // schema panel: Chinese first, the parameter tree untouched in the middle, English last
       schemaOrder: (() => { const p = document.getElementById('schemapanel'); return p === null ? null : Array.from(p.children).map((c) => String(c.className).replace(/^Y0dWHa_/, '')).join(' > '); })(),
       schemaZh: (() => { const z = document.querySelector('#schemapanel [data-kokona-schema-zh]'); return z === null ? null : z.textContent; })(),
@@ -150,6 +157,8 @@ async function main() {
   lines.push(`   hover preview bg : ${a.hoverPreviewBg}   (same)`)
   lines.push(`   cmd menu bg      : ${a.cmdMenuBg}   (must be rgba(255, 255, 255, 0.98) - it had no background at all)`)
   lines.push(`   cmd menu blur    : ${a.cmdMenuBlur}`)
+  lines.push(`   ADD menu bg      : ${a.addMenuBg}   (must be rgba(255, 255, 255, 0.98) - the real one, _menu + _viewport)`)
+  lines.push(`   ADD menu blur    : ${a.addMenuBlur}`)
   lines.push(`   schema order     : ${a.schemaOrder}`)
   lines.push(`                      (must be schemaIntro > schemaParameters > schemaDescription)`)
   lines.push(`   schema zh        : ${a.schemaZh}`)

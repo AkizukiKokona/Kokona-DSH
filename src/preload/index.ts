@@ -176,12 +176,14 @@ html [class*="_panel"]:has([class*="_navList"]) [class*="_themeCube"][class*="_s
 html [class*="_panel"]:has([class*="_navList"]) [class*="_themeCube"][aria-pressed="true"] { background-color: var(--kokona-surface-selected) !important; border-color: #ffffff !important; border-width: 2px !important; box-shadow: 0 0 0 1px var(--kokona-selected-ring), 0 6px 18px rgba(0, 0, 0, 0.18) !important; }
 [class*="_newSession"]:not([class*="_newSession"] *) { background-color: var(--kokona-surface-glass) !important; }
 [class*="_presented"] [class*="_file"]:not([class*="_file"] *) { background-color: var(--kokona-surface-chip) !important; }
-[class*="_tools"] [class*="_add"]:not([class*="_add"] *) { background-color: var(--kokona-surface-float) !important; }
-/* The composer's add menu (dsh-client-ui-commands) declares no background and no
-   backdrop-filter at all - it is a shadow over whatever sits behind it, which is why its rows
-   were unreadable. It gets the menu surface, held just short of white - YG wants it whiter than
-   the floating surfaces so the rows read cleanly. Anchored on _labelText together with
-   _viewport, which only this card has. */
+[class*="_add"]:not([class*="_add"] *) { background-color: var(--kokona-surface-float) !important; }
+/* The composer's add menu. There are two popups behind that button and the one YG actually
+   opens is the drill-down picker from dsh-client-ui-input-trigger, whose _menu declares no
+   background and no backdrop-filter at all - a shadow over whatever sits behind it. The other
+   is dsh-client-ui-commands' _card, which does the same thing. Both get the menu surface, held
+   just short of white. The _viewport child is what the two have in common and neither the jobs
+   menu nor anything else on the page shares. */
+[class*="_menu"]:has([class*="_viewport"]),
 [class*="_card"]:has([class*="_labelText"]):has([class*="_viewport"]) {
   background-color: var(--kokona-surface-menu) !important;
   backdrop-filter: blur(calc(var(--we-blur, 16px) * 1.8)) saturate(calc(var(--we-saturate, 1.8) * 1.15)) brightness(1.03) !important;
