@@ -1245,19 +1245,24 @@ function installOpenInAppFix(): void {
 }
 
 /**
- * Electron ships no default context menu, so a right-click on the composer does nothing
- * at all. This reports what the click landed on and lets the main process build the
- * native menu; the renderer never draws a menu of its own, and only the main process can
- * read the clipboard anyway.
+ * Electron ships no default context menu, so a right-click on text does nothing at all.
+ * This reports what the click landed on and lets the main process decide the menu; the
+ * renderer only draws it, and only the main process can read the clipboard anyway.
  *
- * The gesture is claimed only for text fields and rich-text surfaces. Anything else is
- * left completely alone, so a plugin that puts its own menu on a message keeps it.
+ * A live selection always earns the menu, because copying what is selected is the point.
+ * Otherwise the pointer has to be on actual text — an element that merely contains text is
+ * not enough, or right-clicking anywhere in a padded panel would claim the gesture — and
+ * widgets are skipped so a plugin that puts its own menu on a button keeps it.
  */
 const EDIT_MENU_ATTR = 'data-kokona-edit-menu'
 
 /** Input types whose selection APIs are unusable, or which hold nothing editable. */
 const NON_TEXT_INPUTS =
   /^(?:number|email|date|time|datetime-local|month|week|range|color|file|checkbox|radio|submit|button|reset|image|hidden)$/
+
+/** Widgets own their right-click; only real text inside them is claimed. */
+const WIDGET_SELECTOR =
+  'button, a, select, summary, label, [role="button"], [role="link"], [role="menuitem"], [role="tab"], [role="checkbox"], [role="switch"], [role="radio"], [role="slider"]'
 
 function isTextField(element: Element | null): element is HTMLInputElement | HTMLTextAreaElement {
   if (element instanceof HTMLTextAreaElement) return true
@@ -1270,10 +1275,45 @@ function selectionWithin(element: Element): boolean {
   return element.contains(selection.getRangeAt(0).commonAncestorContainer)
 }
 
+/** A selection anywhere in the document — which is what a copy would actually take. */
+function selectionAnywhere(): boolean {
+  const selection = window.getSelection()
+  return selection !== null && !selection.isCollapsed && selection.toString().length > 0
+}
+
+/**
+ * Whether the point is over a text node rather than over padding, an icon or a widget.
+ *
+ * caretRangeFromPoint is Chromium's spelling and caretPositionFromPoint is the standard
+ * name. Both are non-standard, so both are looked up rather than assumed, and an element
+ * that merely contains text does not count — otherwise a right-click on any padded panel
+ * would claim the gesture.
+ */
+function textUnderPoint(x: number, y: number): boolean {
+  type WithCaret = Document & {
+    caretRangeFromPoint?: (x: number, y: number) => Range | null
+    caretPositionFromPoint?: (x: number, y: number) => { offsetNode: Node } | null
+  }
+  const doc = document as WithCaret
+  try {
+    if (typeof doc.caretRangeFromPoint === 'function') {
+      const range = doc.caretRangeFromPoint(x, y)
+      if (range !== null) return range.startContainer.nodeType === Node.TEXT_NODE
+    }
+    if (typeof doc.caretPositionFromPoint === 'function') {
+      const position = doc.caretPositionFromPoint(x, y)
+      if (position !== null) return position.offsetNode.nodeType === Node.TEXT_NODE
+    }
+  } catch {
+    // A rejected lookup just means "not text".
+  }
+  return false
+}
+
 /**
  * Null means "not our gesture" — the click is handed back to the page untouched.
  */
-function describeEditTarget(target: Element): EditContextState | null {
+function describeEditTarget(target: Element, x: number, y: number): EditContextState | null {
   const field = target.closest('input, textarea')
   if (isTextField(field)) {
     if (field.disabled) return null
@@ -1302,7 +1342,14 @@ function describeEditTarget(target: Element): EditContextState | null {
     }
   }
 
-  return null
+  // Not an editable surface, so this is plain text: a transcript message, a code block, a
+  // table cell, a log line. A selection is enough on its own — that is the case this
+  // exists for — otherwise the pointer has to be on text and outside any widget.
+  const selected = selectionAnywhere()
+  if (!selected && (target.closest(WIDGET_SELECTOR) !== null || !textUnderPoint(x, y))) return null
+
+  // Nothing here can be cut into or pasted over, so the menu offers copy and select-all.
+  return { editable: false, hasSelection: selected, hasContent: true }
 }
 
 /**
@@ -1446,16 +1493,23 @@ function installEditContextMenu(): void {
     (event) => {
       const target = event.target instanceof Element ? event.target : null
       if (target === null) return
-      const state = describeEditTarget(target)
+      const x = event.clientX
+      const y = event.clientY
+      const state = describeEditTarget(target, x, y)
       if (state === null) return
       // Claim the gesture synchronously, before the await below can lose the turn.
       event.preventDefault()
-      const x = event.clientX
-      const y = event.clientY
-      // Right-clicking a field should put the caret where the click landed, which is what
-      // the edit actions act on.
       const entry = target.closest('input, textarea, [contenteditable]')
-      if (entry instanceof HTMLElement) entry.focus()
+      if (entry instanceof HTMLElement) {
+        // Right-clicking a field should put the caret where the click landed, which is what
+        // the edit actions act on.
+        entry.focus()
+      } else if (document.activeElement instanceof HTMLElement) {
+        // The actions run on whatever is focused, so a field that still holds focus would
+        // swallow them. With nothing focused, copy and select-all act on the document
+        // selection instead — which is the text that was right-clicked.
+        document.activeElement.blur()
+      }
       // The clipboard can only be read in the main process, so the entries are built there.
       void api
         .editContext(state)
