@@ -1345,6 +1345,240 @@ div.card
 **坑**：`.card` 里的 `--dsw-hovercard-bg` 是**局部声明**，会盖掉从 `html`/`body` 继承来的同名变量 ——
 所以**不能**靠在外面设置那个变量来改它，必须在卡片自身上写 `background-color`。
 
+---
+
+## 32. 启动页重排（1.1.0）
+
+YG 要的顺序，从上到下：**应用图标 → 品牌标记 → 沐浴晨光 → 内核启动流程 → 详情按钮**。
+
+`renderBoot()` 里的 `center` 现在是
+`logo, brand, name, blessing, spinner(), phaseText, noticeBox, errorBox, actions`。
+
+**沐浴晨光那行原本是绝对定位**（`position:absolute; top:60%`，后来我调到 72%），存在的唯一理由是
+"躲开居中块"。改成正常流之后，间距交给 `main.splash` 的 `gap`，那个百分比就再没有存在意义 ——
+**绝对定位绕开的布局问题，通常就是间距别扭的根源**，不是解法。
+
+**品牌标记**用的是 `resources/brand.svg`（和 preload 注入侧栏的是同一个），在渲染层按
+`?raw` 内联成真元素 —— 它是固定尺寸的 SVG（`583x192`，内部还嵌了一张光栅图），只有内联成元素
+才能用 CSS 定高。CSS 里 `.splash__brand svg { height:44px; width:auto }`。
+
+**渲染层可以 import 仓库根目录外的文件**：`src/renderer/src/boot.ts` 里写
+`../../../resources/brand.svg?raw` 是可以构建的（`root` 只影响 dev server 和 index.html）。
+
+### 签名裂图：CSP 拦了 `data:`
+
+YG 报"SVG 左边那个签名显示图片裂开"。真因在 `src/renderer/index.html`：
+
+```
+default-src 'self'; style-src 'self' 'unsafe-inline'; script-src 'self'
+```
+
+**没有 `img-src`**，于是回落到 `default-src 'self'`，`data:` 图片一律被拦。而品牌 SVG 的左半
+正是 `<image href="data:image/png;base64,...">`。加 `img-src 'self' data:` 解决。
+
+**同类坑**：`installBrand()` 的注释里早就写过"data: URL 会受页面 CSP 约束"，所以在 DSH 页面里
+用的是真 SVG 元素而不是 data URL —— 结果启动页自己踩了同一个坑的另一面。
+
+---
+
+## 33. 轨迹 schema 面板汉化（1.1.0）
+
+YG 要的最终形态：
+
+```
+工具名
+中文翻译              ← 新增
+──────────────
+参数                  ← Parameters，已翻译
+{ ...JSON 规范树... }  ← 原样保留，一个字不动
+（英语原文）           ← 加粗黑字标签
+English original      ← 缩进与标题对齐
+```
+
+**按工具名查表**（`SCHEMA_ZH`，33 条）。描述来自核心自己的工具定义（`describe()` 运行时生成，
+混着路径和策略措辞），所以字符串匹配不可行、核心的 i18n 也从不碰它。**工具名是稳定的**。
+
+**中文元素复用原描述的 class**（`line.className = node.className`）以继承排版 —— 代价是
+**选择器会匹配到它自己**，所以必须 `if (node.hasAttribute(SCHEMA_ZH_ATTR)) continue`。
+少了这一行，下一轮 tick 会往它身上再套一层。
+
+**状态判断用自校验，不用标记位**：
+
+```ts
+if (panel.lastElementChild === node && panel.querySelector(`[${SCHEMA_ZH_ATTR}]`) !== null) continue
+```
+
+"英文已经在最后、且中文存在"就是我们想要的状态，直接读它。**标记位会过期**（见 §34）。
+
+**英文那行为什么贴左**：它的 14px 内缩只来自 `_schemaIntro{padding:12px 14px 6px}`，一旦被移到
+`_schemaParameters` 后面就脱离了那个容器。补 `padding-left/right: 14px`。
+
+**锚定**：`[class$="_schema"]` 只匹配面板本身（兄弟类名以 `_schemaIntro` / `_schemaName` /
+`_schemaParameters` 结尾，`$=` 不会命中）。
+
+---
+
+## 34. 报错注释消失：单向标记 + 节流（1.1.0）
+
+YG 报"第一次点开显示正常，过一会儿变空白，收起再展开又好了，然后循环"。
+
+**旧实现有两个致命设计**：
+
+```ts
+for (const stale of ...) {
+  if (stale.previousElementSibling?.hasAttribute(FS_NOTE_SOURCE_ATTR)) continue
+  stale.remove()                                    // ← 清理
+}
+if (now - fsHintCheckedAt < FS_HINT_INTERVAL_MS) return   // ← 2 秒节流
+...
+if (owner.hasAttribute(FS_NOTE_SOURCE_ATTR)) continue     // ← 单向标记
+owner.setAttribute(FS_NOTE_SOURCE_ATTR, '')
+```
+
+React 不停重渲染。**它复用卡片元素时，标记位存活** —— 于是清理那一趟删掉了注释，重新插入那一趟
+却因为标记还在而**永久跳过**该卡片。收起展开之所以"修好"，是因为 React 重建卡片、标记丢失。
+
+**改法：幂等 + 自校验，无标记无节流。**
+
+```ts
+const place = (owner, text) => {
+  if (owner === null) return
+  const next = owner.nextElementSibling
+  if (next !== null && next.hasAttribute(FS_NOTE_ATTR)) { keep.add(next); return }
+  ...
+}
+```
+
+"注释正确的定义 = 它已经是源元素的下一个兄弟"。两趟共用 `place()`：卡片那趟（查询便宜，每 tick 跑）
+和纯文本那趟（走 TreeWalker，给卡片外的散文用）。
+
+**同一轮里我引入又修掉的一个回归**：卡片那趟直接锚在匹配到的元素上，但匹配到的是卡片**内部**的
+`_root`，而文本那趟的 `noteAnchor` 解析到外层卡片 —— 两个锚点不同，插出一条在卡片里、一条在卡片外。
+探针报出 `count: 3` 和 `INSIDE card: true`。让卡片那趟也过一遍 `noteAnchor` 就统一了。
+
+---
+
+## 35. `_add` 后缀碰撞（1.1.0）
+
+我为加号按钮写了：
+
+```css
+[class*="_add"]:not([class*="_add"] *) { background-color: var(--kokona-surface-float) !important; }
+```
+
+`dsh-client-ui-deliverables` 里有个类叫 **`IP6KhG_add`** —— **diff 里"新增行"的底色**，
+`.IP6KhG_number`（`+n` 行号）也在它下面。于是**每一行新增代码、每一个行号**都被刷成了浮层底色。
+
+**已整条删除**，没有替换。加号按钮回到核心自己的 `--dsw-specific-selector`。
+
+**教训**：`_schema`、`_menu`、`_card`、`_viewport` 我都用 `:has()` 组合收窄过，唯独 `_add` 图省事
+用了裸后缀。**AGENTS.md 要求结构锚定，裸后缀不算。**
+
+---
+
+## 36. 加号菜单：改错了模块（1.1.0）
+
+这一轮绕得最久，值得完整记下来。
+
+**YG 一直说"加号弹出的菜单太透明"。我改了三次，全是空的。**
+
+**第一次错：模块选错。** 我从 `dsh-client-ui-commands` 的 `.mufS8W_card` 有
+`bottom: calc(100% + 4px); left: 0`（往上弹、左对齐）推断它就是左下角加号的菜单。**方向看着对，
+模块是错的。**
+
+**第二次错：规则从来没生效。** 壳里原来那条 `[class*="_tools"] [class*="_add"]` 需要一个
+`_tools` 祖先，而加号所在的 `dsh-client-ui-conversation` 包里**没有**这个类 —— 那条规则一直是死的，
+我却基于它调了三次颜色。
+
+**正确的定位方式**：直接找**定义**。
+
+```powershell
+# 谁定义了 _add{ ？
+Get-ChildItem $ns -Recurse -Include *.js | ForEach-Object {
+  $t = Get-Content $_.FullName -Raw
+  $m = [regex]::Match($t, '([A-Za-z0-9_]{4,8})_add\{')
+  if ($m.Success) { $_.FullName; $m.Groups[1].Value }
+}
+```
+
+结果：
+
+| | 类名 | 背景 |
+|---|---|---|
+| 加号**按钮** | `uV2eYG_add`（conversation） | `var(--dsw-specific-selector)` |
+| 加号**弹出菜单** | `._3e4SsG_menu`（**input-trigger**） | **完全没有声明** |
+| 另一个命令弹窗 | `.mufS8W_card`（commands） | **完全没有声明** |
+
+**两个弹窗都没有 `background`，也没有 `backdrop-filter`** —— 纯靠 `box-shadow` 撑着，
+文字直接压在后面的内容上。这才是"太透明"的真相：**不是透明度高，是零底色。**
+
+**最终选择器**（两个弹窗一起盖，`_viewport` 是它们的共同点）：
+
+```css
+[class*="_menu"]:has([class*="_viewport"]),
+[class*="_card"]:has([class*="_labelText"]):has([class*="_viewport"]) {
+  background-color: var(--kokona-surface-menu) !important;
+  ...
+}
+```
+
+**这个值我调了八次**：0.85 → 0.94 → 0.97 → 0.72 → 0.98 → 0.90 → 0.86 → **0.7**。
+YG 最后说"算了，白色就白色吧"——**浮层一闪而过，文字可读性优先**，就停在 0.7。
+这个值同时驱动加号菜单、命令弹窗、产物悬停预览，**改一处三处一起动**。
+
+### 这一轮真正的教训
+
+**三次错误全是"推断代替验证"**：从 `.card` 的位置属性推断模块、从"看着像"推断选择器、
+基于死规则调数值。唯一落地的一次，是**去找 `_add{` 的定义**。
+
+**另一个教训是方向**：YG 说"不够透明"，我理解成"需要更虚"，还据此编了一套自洽解释
+（"参数那行是透的"）。**方向错的时候，推理越顺越危险。** 后来他澄清是口误，实际要更白。
+
+---
+
+## 37. 1.1.0 发行
+
+- `package.json` 从 **1.0.5**（不是我以为的 1.0.4 —— `scripts/local-version.mjs` 自己动过）跳到 **1.1.0**
+- 两个 README 顶部居中 `resources/brand.svg`（420px）+ 徽章行（release / tag / downloads / platform / license / Codeberg）
+- 英文 README 原来缺语言切换行，已补
+- **GitHub 的 SVG 消毒没有剥掉内嵌的 `data:` 光栅图** —— YG 确认渲染正常，这条隐患清了
+- tag `v1.1.0` **先在本地打**（注释标签），确认后再 `git push github v1.1.0` 触发 CI
+- 工作流会用提交列表**自动生成**发行说明，手写的那份用 `gh release edit v1.1.0 --notes-file ...` 覆盖
+- 手写说明存在 `.github/release-notes-1.1.0.md`
+
+**Codeberg 同步是手动的**（CI 只发 GitHub）。步骤：从 GitHub 下载产物 → `POST /releases` →
+`POST /releases/{id}/assets?name=<urlencoded>`，带 `-InFile` + `Content-Type: application/octet-stream`。
+
+**删 tag 的坑**：Gitea 的 `DELETE /repos/{o}/{r}/git/refs/tags/{tag}` 返回 **405**；
+`DELETE /repos/{o}/{r}/tags/{tag}` 才是对的。
+
+**旧 tag 清理**：`gh release delete v1.0.4 --yes --cleanup-tag` 会连带删掉远端 tag
+（本地 tag 也要 `git tag -d`）。
+
+---
+
+## 38. 数值改动的纪律
+
+这轮在同一个 token 上改了八次。**写下来免得下次重犯**：
+
+1. **改之前先确认方向。** "不够透明" / "不够白" 是相反的指令，读错一次要绕好几轮。
+   收到模糊表述时，**用自己的话复述一遍方向再动手**。
+2. **改之前先确认目标元素。** 用探针或 devtools 量出**计算值**，别从声明或位置属性推断。
+3. **一次改到位，不要小步试。** YG 原话："你这次起码按照之前每改一次的 delta 加大 3 倍就差不多了"
+   —— 小步试让他反复重打包，成本比我一次给足高得多。
+4. **探针只证明合成 DOM 里选择器匹配**，不能证明真实应用里结构相同。真看不出来时，
+   让 YG 在 devtools 里量一个计算值发过来，比我再猜一轮快。
+
+---
+
+## 39. 待办
+
+- **Codeberg 的 v1.1.0** —— 本轮的同步任务在后台跑（4 个产物约 420 MB）
+- **`v1.0.4`** 已从 GitHub（release + tag + 本地 tag）和 Codeberg（远端 tag）清掉
+- **`e2e-report.txt`** 仍未加入 `.gitignore`（有意不提交）
+- **未跟踪的草稿**：`KokonaHARNESS.svg`、`name.png`、`tools/` —— 不要动、不要提交
+
+
 
 
 

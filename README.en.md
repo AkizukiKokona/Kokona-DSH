@@ -3,12 +3,22 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/AkizukiKokona/KokonaHarness/releases/latest"><img alt="release" src="https://img.shields.io/github/v/release/AkizukiKokona/KokonaHarness?label=release&sort=semver&color=4d6bfe"></a>
-  <a href="https://github.com/AkizukiKokona/KokonaHarness/tags"><img alt="tag" src="https://img.shields.io/github/v/tag/AkizukiKokona/KokonaHarness?label=tag&sort=semver"></a>
-  <a href="https://github.com/AkizukiKokona/KokonaHarness/releases"><img alt="downloads" src="https://img.shields.io/github/downloads/AkizukiKokona/KokonaHarness/total?label=downloads"></a>
+  <b>GitHub</b> ·
+  <a href="https://github.com/AkizukiKokona/KokonaHarness/releases/latest"><img alt="GitHub release" src="https://img.shields.io/github/v/release/AkizukiKokona/KokonaHarness?label=release&sort=semver&color=4d6bfe"></a>
+  <a href="https://github.com/AkizukiKokona/KokonaHarness/tags"><img alt="GitHub tag" src="https://img.shields.io/github/v/tag/AkizukiKokona/KokonaHarness?label=tag&sort=semver"></a>
+  <a href="https://github.com/AkizukiKokona/KokonaHarness/releases"><img alt="GitHub downloads" src="https://img.shields.io/github/downloads/AkizukiKokona/KokonaHarness/total?label=downloads"></a>
+</p>
+
+<p align="center">
+  <b>Codeberg</b> ·
+  <a href="https://codeberg.org/AkizukiKokona/KokonaHarness/releases"><img alt="Codeberg release" src="https://img.shields.io/codeberg/v/release/AkizukiKokona/KokonaHarness?label=release&color=2185d0"></a>
+  <a href="https://codeberg.org/AkizukiKokona/KokonaHarness/releases"><img alt="Codeberg tag" src="https://img.shields.io/codeberg/v/tag/AkizukiKokona/KokonaHarness?label=tag"></a>
+  <a href="https://codeberg.org/AkizukiKokona/KokonaHarness"><img alt="Codeberg stars" src="https://codeberg.org/AkizukiKokona/KokonaHarness/badges/stars.svg"></a>
+</p>
+
+<p align="center">
   <img alt="platform" src="https://img.shields.io/badge/platform-Windows%20%7C%20macOS%20%7C%20Linux-0078d4">
   <img alt="license" src="https://img.shields.io/badge/license-MIT-green">
-  <a href="https://codeberg.org/AkizukiKokona/KokonaHarness"><img alt="Codeberg" src="https://codeberg.org/AkizukiKokona/KokonaHarness/badges/release.svg"></a>
 </p>
 
 # KokonaHarness
