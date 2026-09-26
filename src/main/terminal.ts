@@ -10,6 +10,10 @@ export interface TerminalOptions {
   dshHome: string
   env: NodeJS.ProcessEnv
   binDirs?: Array<string | null>
+  /** The profile this shell boots. `dsh` refuses to run without one. */
+  profile?: string
+  /** Absolute path to the real dsh launcher, so the wrapper can call it by path. */
+  dshBin?: string | null
 }
 
 function psQuote(value: string): string {
@@ -23,7 +27,7 @@ function launch(command: string, args: string[], options: Parameters<typeof spaw
   child.unref()
 }
 
-export function openTerminal({ dshHome, env, binDirs = [] }: TerminalOptions): void {
+export function openTerminal({ dshHome, env, binDirs = [], profile, dshBin = null }: TerminalOptions): void {
   const childEnv: NodeJS.ProcessEnv = { ...env }
   const current = childEnv.PATH ?? childEnv.Path ?? ''
   const extra = binDirs.filter((dir): dir is string => typeof dir === 'string' && existsSync(dir))
@@ -37,7 +41,22 @@ export function openTerminal({ dshHome, env, binDirs = [] }: TerminalOptions): v
     // once and the window never shows. `start` opens a fresh console owned by
     // the new process, which survives on its own.
     const title = `${DISPLAY_NAME} Terminal`
-    const command = `$host.UI.RawUI.WindowTitle = ${psQuote(title)}; Set-Location -LiteralPath ${psQuote(dshHome)}`
+    // `dsh` requires an explicit --profile for every command except -h, and this shell always
+    // boots the configured profile, so a bare `dsh` in this window was a dead end even though
+    // the button promises "dsh 可直接使用". Wrap it in a function that supplies the profile
+    // unless one is already given. A function rather than an alias, so the remaining arguments
+    // are forwarded positionally; -h/--help is left alone so it still prints usage.
+    const wrapper =
+      profile && dshBin !== null && existsSync(dshBin)
+        ? `function dsh { $a = @($args); if ($a -notcontains '--profile' -and $a -notcontains '-h' -and $a -notcontains '--help') { $a = @('--profile', ${psQuote(profile)}) + $a }; & ${psQuote(dshBin)} @a }`
+        : null
+    const command = [
+      `$host.UI.RawUI.WindowTitle = ${psQuote(title)}`,
+      `Set-Location -LiteralPath ${psQuote(dshHome)}`,
+      wrapper
+    ]
+      .filter((part): part is string => part !== null)
+      .join('; ')
     launch('cmd.exe', ['/c', 'start', title, 'powershell.exe', '-NoLogo', '-NoExit', '-Command', command], {
       cwd: dshHome,
       env: childEnv,

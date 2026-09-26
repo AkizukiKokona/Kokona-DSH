@@ -252,7 +252,13 @@ export class Shell {
     const binDir = version ? join(versionDir(version), 'node_modules', '.bin') : null
     const nodeExe = resolveNodeExecutable()
     const nodeDir = nodeExe ? dirname(nodeExe) : null
-    openTerminal({ dshHome, env: buildCoreEnv(dshHome), binDirs: [binDir, nodeDir] })
+    openTerminal({
+      dshHome,
+      env: buildCoreEnv(dshHome),
+      binDirs: [binDir, nodeDir],
+      profile: config.profile,
+      dshBin: binDir ? join(binDir, 'dsh.cmd') : null
+    })
   }
 
   async checkUpdate(): Promise<{ current: string | null; latest: string | null; channel: string }> {
