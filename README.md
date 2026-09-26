@@ -12,8 +12,7 @@
 
 <p align="center">
   <b>Codeberg</b>（镜像）·
-  <a href="https://codeberg.org/AkizukiKokona/KokonaHarness/releases"><img alt="Codeberg 最新发行版" src="https://img.shields.io/codeberg/v/release/AkizukiKokona/KokonaHarness?label=release&color=2185d0"></a>
-  <a href="https://codeberg.org/AkizukiKokona/KokonaHarness/releases"><img alt="Codeberg tag" src="https://img.shields.io/codeberg/v/tag/AkizukiKokona/KokonaHarness?label=tag"></a>
+  <a href="https://codeberg.org/AkizukiKokona/KokonaHarness/releases"><img alt="Codeberg 最新发行版" src="https://codeberg.org/AkizukiKokona/KokonaHarness/badges/release.svg"></a>
 </p>
 
 <p align="center">
