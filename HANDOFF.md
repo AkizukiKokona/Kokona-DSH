@@ -887,5 +887,45 @@ v1.0.0/1.0.1/1.0.2 各约 421 MB，加上 v1.0.3 的前三个资产累计 1.56 G
 打到 `$base/releases/{id}/assets`，`Authorization: token <40 位>` 走 `-Headers`。
 exe 95 MB 约 31s，其余每个 19–20s。脚本按名字跳过已存在的资产，所以中断后重跑是安全的。
 
+## 21. 本地版本号和云端不一致时的最小修法（`setver.cmd`）
+
+**现象**：代码已经是 1.0.3 的代码，但打包那一刻 `package.json` 还是 1.0.2，于是本地这份应用自称
+1.0.2，而 1.0.3 已经发布 → 更新检查一直说有更新，提示的其实是它自己。
+
+判断逻辑在 `checkShellUpdate()`：
+
+```ts
+const current = app.getVersion()
+const hasUpdate = compare(release.version, current) > 0
+```
+
+打包之后 `app.getVersion()` 读的是 **`resources/app.asar` 里的 `package.json`**
+（electron-builder 把源 `package.json` 拷进去了），**不是** exe 的版本元数据 ——
+所以只改 asar 里那一个字段就够，不用重新打包，更不用碰云端。
+
+**做法**：`scripts/set-packed-version.mjs` 做**原地字节替换**。`1.0.2` 与 `1.0.3` 等长，
+所以 asar 头里的 size / offset **全部保持有效**，620 kB 的归档一个字节都不用重排。
+
+- 锚点取 `"name": "kokonaharness"` 之后的第一个 `"version": "…"`。**不能直接搜版本串**：
+  包里别处也有裸的 `"version"`（渲染进程 `index.js` 里有 `el("div", "version")`）。
+- 两个版本长度不一致就**拒绝**，让他走 `npm run pack`（原地替换会错位）。
+- 动真文件之前先在**副本**上试：写出 `.probe`，用 `@electron/asar` 重新解析并回读
+  `package.json`，确认头和版本都对，才写回去。
+
+**验证记录**：在副本上跑 → `12 entries, packed version 1.0.3`；与原文件逐字节比对
+**只有 1 个字节不同**（offset 619269，`2`→`3`），文件长度 619497 不变；真文件始终是 1.0.2。
+
+`setver.cmd` 是外壳：等 `KokonaHarness.exe` 退出（asar 被内存映射，跑着的时候写不了）→
+跑上面的脚本 → 用 `explorer.exe` 重新拉起。**纯本地，不下载、不重建、不发布。**
+
+`repack.cmd` 留给「代码真的变了」的情况：`npm run build && electron-builder --dir` 完整重打。
+这轮顺手给它加了两件事 —— 开头打印 `package.json` 的版本；打完回读 exe 的 `ProductVersion`
+并与源版本比对（不一致就警告）；等待循环同时认 `KokonaHarness.exe` 和改名前的 `Kokona DSH.exe`。
+
+**踩的坑**：`for /f "usebackq"` 的反引号里写管道要转义成 `^|`，但那个 `^` 会**原样传给**
+PowerShell（`A positional parameter cannot be found that accepts argument '^'`）。
+改成不用管道的写法：`(ConvertFrom-Json (Get-Content 'package.json' -Raw)).version`。
+
+
 
 
