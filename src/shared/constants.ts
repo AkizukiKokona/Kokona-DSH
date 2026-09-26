@@ -49,6 +49,7 @@ export const IPC = {
   getConfig: 'kokona:get-config',
   setConfig: 'kokona:set-config',
   revealData: 'kokona:reveal-data',
+  revealPath: 'kokona:reveal-path',
   logs: 'kokona:logs',
   reportTheme: 'kokona:report-theme',
   checkShellUpdate: 'kokona:check-shell-update',

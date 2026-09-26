@@ -1,6 +1,6 @@
 import { existsSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
-import { contextBridge, ipcRenderer, type IpcRendererEvent } from 'electron'
+import { contextBridge, ipcRenderer, webFrame, type IpcRendererEvent } from 'electron'
 import { IPC } from '../shared/constants'
 import type { KokonaApi, UpdateInfo } from '../shared/api'
 import type { AppConfig, RuntimeSnapshot, ShellUpdateInfo, WindowState } from '../shared/types'
@@ -18,6 +18,7 @@ const api: KokonaApi = {
   reloadUi: () => ipcRenderer.send(IPC.reloadUi),
   openTerminal: () => ipcRenderer.invoke(IPC.openTerminal) as Promise<void>,
   revealData: () => ipcRenderer.invoke(IPC.revealData) as Promise<string>,
+  revealPath: (path) => ipcRenderer.invoke(IPC.revealPath, path) as Promise<void>,
   getLogs: () => ipcRenderer.invoke(IPC.logs) as Promise<string[]>,
   reportTheme: (theme) => ipcRenderer.send(IPC.reportTheme, theme),
   checkShellUpdate: () => ipcRenderer.invoke(IPC.checkShellUpdate) as Promise<ShellUpdateInfo>,
@@ -310,23 +311,38 @@ body[data-we-sidebar-glass] [class*="_bottomPanel"] {
    src, so the replacement is injected as an inline SVG element by installBrand():
    a data: URL would be subject to the page's CSP, and an external image cannot
    inherit currentColor. Under a Windows titlebar the row is 40px tall with
-   overflow hidden, so it has to open up: the lockup renders 72px tall, which is
-   3x the official 24px brand row and the ceiling YG allowed. Everything is
-   forced left-aligned inside the row. */
+   overflow hidden, so the height has to open up: the lockup renders 72px tall,
+   which is 3x the official 24px brand row and the ceiling YG allowed. Everything
+   is forced left-aligned inside the row.
+
+   Containment is load-bearing. The official row is 40px tall with overflow hidden;
+   growing the lockup to ~219px wide while leaving the row on overflow visible made
+   the SVG set the flex row's min-content width, so the lockup fought the resizable
+   sidebar for control of the column width and the whole horizontal layout
+   oscillated. min-width:0 on every ancestor plus overflow hidden keeps the row out
+   of the width negotiation: in a narrow sidebar the lockup letterboxes inside its
+   box (preserveAspectRatio is xMinYMid, so it stays left-aligned and vertically
+   centered) instead of pushing the sidebar wider. */
 [class*="_logoRow"] {
   height: auto !important;
   min-height: 76px !important;
-  overflow: visible !important;
+  min-width: 0 !important;
+  max-width: 100% !important;
+  overflow: hidden !important;
   align-items: center !important;
 }
 [class*="_logoRow"] [class*="_brand"] {
   justify-content: flex-start !important;
-  overflow: visible !important;
+  min-width: 0 !important;
+  max-width: 100% !important;
+  overflow: hidden !important;
 }
 [class*="_logoRow"] [class*="_brandIdentity"] {
   height: auto !important;
   justify-content: flex-start !important;
-  overflow: visible !important;
+  min-width: 0 !important;
+  max-width: 100% !important;
+  overflow: hidden !important;
 }
 /* Hidden only while the replacement is mounted, so a failed asset read degrades to
    the stock brand instead of leaving an empty row. */
@@ -337,8 +353,9 @@ body[data-kokona-brand] [class*="_logoRow"] svg[data-kokona-brand-mark] {
   display: block !important;
   height: 72px !important;
   width: auto !important;
+  min-width: 0 !important;
   max-width: 100% !important;
-  flex: none;
+  flex: 0 1 auto;
 }
 `
   document.head.appendChild(style)
@@ -1170,6 +1187,61 @@ function installHeroCopy(): void {
   headline.textContent = HERO_HEADLINE
 }
 
+/**
+ * The core's open-in-app menu cannot open a file in File Explorer.
+ *
+ * Its `explorer` entry launches the path as an Explorer target, which does nothing
+ * at all for a file — Explorer opens a target, it does not "open with" one — so the
+ * click lands nowhere and the menu looks dead. Its reveal gesture has a second
+ * defect: it passes `/select,` and the path as two argv entries, and Explorer parses
+ * its own command line, so it sees an empty selection and opens a bare window.
+ *
+ * Neither is reachable from CSS and the core is never patched, so the gesture is
+ * intercepted on the transport the client actually uses. `POST open-in-app/open`
+ * carries the path in its body; the hook swallows it for the explorer app, answers
+ * with a synthetic success, and asks the main process to reveal the path properly.
+ *
+ * The hook has to run in the page's own world because that is where the client's
+ * global fetch lives, and `webFrame.executeJavaScript` is the one entry point that
+ * reaches it from an isolated preload. The two worlds share no objects, so they talk
+ * over a DOM event — the one channel both can see.
+ */
+const OPEN_IN_APP_FIX_ATTR = 'data-kokona-open-in-app'
+const OPEN_IN_APP_REVEAL_EVENT = 'kokona:reveal'
+
+function installOpenInAppFix(): void {
+  if (document.documentElement.hasAttribute(OPEN_IN_APP_FIX_ATTR)) return
+  document.documentElement.setAttribute(OPEN_IN_APP_FIX_ATTR, '')
+  document.addEventListener(OPEN_IN_APP_REVEAL_EVENT, (event) => {
+    const target = (event as CustomEvent<unknown>).detail
+    if (typeof target === 'string' && target !== '') void api.revealPath(target)
+  })
+  const source = `(() => {
+  if (window.__kokonaOpenInAppFix) return
+  window.__kokonaOpenInAppFix = true
+  const native = window.fetch.bind(window)
+  window.fetch = (input, init) => {
+    try {
+      const url = typeof input === 'string' ? input : (input && input.url) || ''
+      const method = String((init && init.method) || (input && input.method) || 'GET').toUpperCase()
+      if (method === 'POST' && /(^|\\/)open-in-app\\/open$/.test(url) && init && typeof init.body === 'string') {
+        const body = JSON.parse(init.body)
+        if (body && body.app === 'explorer' && typeof body.path === 'string' && body.path !== '') {
+          document.dispatchEvent(new CustomEvent('${OPEN_IN_APP_REVEAL_EVENT}', { detail: body.path }))
+          return Promise.resolve(new Response('{"ok":true}', { status: 200, headers: { 'content-type': 'application/json' } }))
+        }
+      }
+    } catch {
+      // An unreadable body is not ours to interpret; fall through to the real fetch.
+    }
+    return native(input, init)
+  }
+})()`
+  void webFrame.executeJavaScript(source).catch(() => {
+    // A page that refuses injection keeps the stock gesture.
+  })
+}
+
 async function bootstrap(): Promise<void> {
   if (!isDshPage()) return
   const start = () => {
@@ -1179,13 +1251,15 @@ async function bootstrap(): Promise<void> {
       })
     }
     observeSettings()
-    // One tick for the three things that must survive React re-renders: the right
-    // panel sweep, the brand lockup and the hero copy. Each is guarded by its own
-    // cheap check, so a tick after the work is done is a couple of reads.
+    // One tick for the things that must survive React re-renders: the right panel
+    // sweep, the brand lockup, the hero copy and the open-in-app hook. Each is
+    // guarded by its own cheap check, so a tick after the work is done is a couple
+    // of reads.
     const tick = (): void => {
       syncRightPanel()
       installBrand()
       installHeroCopy()
+      installOpenInAppFix()
     }
     tick()
     new MutationObserver(tick).observe(document.documentElement, { childList: true, subtree: true })

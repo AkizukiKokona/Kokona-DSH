@@ -19,6 +19,7 @@ export interface KokonaApi {
   reloadUi(): void
   openTerminal(): Promise<void>
   revealData(): Promise<string>
+  revealPath(path: string): Promise<void>
   getLogs(): Promise<string[]>
   reportTheme(theme: 'dark' | 'light'): void
   checkShellUpdate(): Promise<ShellUpdateInfo>

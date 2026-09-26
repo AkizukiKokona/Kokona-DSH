@@ -688,8 +688,10 @@ ctx.slots.register({ name: "sidebar.brand.name" }, OfficialBrandName)   // Brand
   约 **219px 宽**。`electron-builder.yml` 的 `extraResources` 把它放到 `process.resourcesPath/brand.svg`。
 - 实现（`src/preload/index.ts` 的 `installBrand()`）：读进 SVG 后**作为内联 SVG 元素**插进
   `_logoRow _brandIdentity`，`preserveAspectRatio="xMinYMid meet"` + `height:72px` + `max-width:100%`
-  → **居左**，侧栏窄了自动缩。CSS 同时把 `_logoRow` 从 40px / `overflow:hidden` 放开到
-  `min-height:76px` / `visible`，并把 `_brand`、`_brandIdentity` 强制 `justify-content:flex-start`。
+  → **居左**，侧栏窄了自动缩。CSS 同时把 `_logoRow` 从 40px 放开到 `min-height:76px`，
+  并把 `_brand`、`_brandIdentity` 强制 `justify-content:flex-start`。
+  **注意：这里当时把 `overflow` 从 `hidden` 改成了 `visible`，是错的 —— 直接导致 §20 的横向震荡，
+  已在 1.0.3 收回 `hidden` 并补 `min-width:0`。**
 - **不是 data URI，也不是 background-image**（§18 那条推测作废）：`img-src` 可能回落到
   `default-src 'none'`，更要紧的是 `#000` 得跟着主题走，而外部图片继承不到 `currentColor`。
   所以 `installBrand()` 把 `fill="#000"` 全改写成 `currentColor`（深色主题下自动变浅），
@@ -753,4 +755,102 @@ $p7 = "$env:LOCALAPPDATA\Microsoft\WindowsApps\Microsoft.PowerShell_8wekyb3d8bbw
 `Invoke-RestMethod -Form @{attachment = Get-Item $path}` 直接就是 gitea 要的 multipart 字段名，
 不用写 header 文件；`Authorization: token <token>` 走 `-Headers`。四个资产 422 MB 一次跑完，
 服务端回读的 `size` 与 GitHub 逐个相等。
+
+## 20. 1.0.3：横向震荡 + 「文件资源管理器」点了没反应
+
+YG 报的两个 bug，根因都不在表面。
+
+### bug 1：打开方式菜单左右反复伸缩（1.0.2 的 logo 改动引入的回归）
+
+现象：点开菜单后左右距离「变长一下、又变长一下、再弹回原位」，一直循环。
+
+**根因是 §18 那次改 logo 时把 `overflow` 从 `hidden` 改成了 `visible`。** 官方
+`_logoRow` 是 `height:40px; overflow:hidden`；为了放 72px 的 lockup，行高必须放开，但
+`overflow:visible` 一并放开了**宽度**约束。那个 lockup 宽约 219px（3.036:1 × 72px），
+于是它成了这一行 flex 的 **min-content 宽度**；侧栏是可拖拽调宽的，两者开始抢「这一列多宽」，
+整个横向布局来回震荡 —— 菜单是 `align:end` 定位的，所以看起来就是菜单在伸缩。
+
+修法：把约束装回去，**没有动任何 JS**。
+
+```css
+[class*="_logoRow"] { height:auto; min-height:76px; min-width:0; max-width:100%; overflow:hidden; align-items:center }
+[class*="_logoRow"] [class*="_brand"]         { justify-content:flex-start; min-width:0; max-width:100%; overflow:hidden }
+[class*="_logoRow"] [class*="_brandIdentity"] { height:auto; justify-content:flex-start; min-width:0; max-width:100%; overflow:hidden }
+svg[data-kokona-brand-mark] { display:block; height:72px; width:auto; min-width:0; max-width:100%; flex:0 1 auto }
+```
+
+`min-width:0` 是关键（flex 子项默认 `min-width:auto`，会把 219px 顶到父级），
+`overflow:hidden` 让侧栏窄的时候 lockup 在自己盒子里按比例缩下去而不是把侧栏顶宽 ——
+`preserveAspectRatio="xMinYMid"` 保证缩下去仍然居左、垂直居中。72px 和居左都没丢。
+
+**教训**：放大一个 flex 子项时，改高度可以，别顺手放开 `overflow`。宽高是一起被
+`overflow:visible` 放开的。
+
+### bug 2：打开方式菜单里「文件资源管理器」点了没反应
+
+现象：点它不开任何东西；同一个文件用 VS Code 打开正常。
+
+菜单组件是 `dsh-client-ui-open-in-app`（前缀 `OMoRSG_`），「文件资源管理器」这一条来自
+`dsh-host-open-in-app/catalog.js` 的目录项：
+
+```js
+{ id: 'explorer', platforms: { win32: spec({ kind: 'fixed', launch: { kind: 'shell-open' }, iconPath: '${SystemRoot}/explorer.exe' }) } }
+```
+
+`shell-open` → `openNativePath(path)` → `runExplorer([explorerTarget(path)])` →
+`execFile('explorer.exe', ['file:///D:/…'])`。**Explorer 是「打开一个目标」，不是「用某程序打开一个文件」**，
+对文件它什么都不做。实测（`Shell.Application.Windows()` 回读窗口 URL，这是唯一可靠的观察手段）：
+
+| 命令 | 结果 |
+|---|---|
+| `explorer.exe file:///D:/kh-open-test`（目录） | ✅ 开出该目录 |
+| `explorer.exe D:\kh-open-test`（目录，已有窗口） | 0 新窗口 —— 复用已存在的窗口，所以「点了没反应」 |
+| `explorer.exe file:///D:/kh-open-test/sample.txt`（**文件**） | **0 新窗口，什么也没发生** |
+| `explorer.exe D:\kh-open-test\sample.txt`（文件） | 0 新窗口 |
+
+顺带查到核心的 reveal 手势也是坏的：`revealNativePath` 写的是
+`runExplorer(['/select,', explorerTarget(path)])` —— 把 `/select,` 和路径当成**两个 argv**。
+Explorer 自己解析命令行，于是它收到一个空的选择项，开出一个空白窗口。必须拼成一个字符串
+`/select,<path>`（源码注释里其实写了「Explorer parses its own command line and splits fields at
+commas and equals signs」，但实现没照做）。
+
+**核心不能打补丁，所以截在客户端真正用的那条传输上。** 客户端的 `launch()` 发的是
+`POST open-in-app/open`，body 是 `{app, path}`（路由常量 `OPEN_IN_APP_OPEN_ROUTE = "open-in-app/open"`，
+`OPEN_IN_APP_APPS_ROUTE` / `OPEN_IN_APP_ICON_PREFIX_ROUTE` 是另两条）。做法：
+
+1. preload 用 **`webFrame.executeJavaScript`** 往页面**主世界**装一个 `window.fetch` 钩子。
+   必须在主世界 —— 客户端的 `fetch` 在那；隔离世界 patch 不到。`executeJavaScript` 是隔离 preload
+   唯一能到主世界的入口（CSP 挡不住它，它不是 script 标签）。
+2. 命中 `POST …/open-in-app/open` 且 `body.app === 'explorer'` 时，吞掉请求、回一个合成的
+   `new Response('{"ok":true}', {status:200})`，避免核心再去跑那条坏路径。
+3. 两个世界之间**只能用 DOM 事件通信**（唯一共享的通道）：主世界
+   `document.dispatchEvent(new CustomEvent('kokona:reveal', {detail: path}))`，preload 在隔离世界监听。
+4. preload → `api.revealPath(path)` → IPC `kokona:reveal-path` → 主进程：
+
+```ts
+async function revealPath(target: string): Promise<void> {
+  if (statSync(target).isDirectory()) { await electronShell.openPath(target); return }
+  electronShell.showItemInFolder(target)   // Electron 自己的 reveal，/select, 和路径是拼对的
+}
+```
+
+目录仍然「打开目录」，文件变成「在文件夹里选中它」—— 这才是叫「文件资源管理器」的条目该干的事。
+只在 `app === 'explorer'` 时接管：macOS 的 `finder`（`open -R`）和 linux 的 `filemanager`
+（`xdg-open <dirname>`）本来就是对的，不动。
+
+新增：`IPC.revealPath`（`shared/constants.ts`）、`KokonaApi.revealPath`（`shared/api.ts`）、
+主进程 `revealPath()` + handler（`main/ipc.ts`）、`installOpenInAppFix()`（`preload/index.ts`，
+挂进 `tick()`，用 `documentElement` 上的 `data-kokona-open-in-app` 做一次性守卫）。
+
+**注意**：reveal 那条（菜单底部的「显示文件位置」）走的是 session controller 的 RPC，**不是**这条
+HTTP 路由，所以本次没有覆盖它。核心那个 `/select,` 两参数的 bug 仍在，要修得再找那条 RPC 的传输。
+
+### 验证
+
+`npm run typecheck` exit 0；`npm run build` exit 0，产物 `out/main/index.js` 76.5 kB、
+`out/preload/index.js` 52.5 kB、`out/renderer/*` 齐全。逐字核对了打进包里的代码：六条 logo CSS
+规则（含 `min-width:0` / `overflow:hidden`）、主世界钩子（`__kokonaOpenInAppFix`、正则
+`/(^|\/)open-in-app\/open$/`、合成 `Response`）、`kokona:reveal-path`、`revealPath()` 辅助函数全部在位。
+**未做**：没有启动应用看实际观感（会杀掉正在跑的内核）。
+
 
