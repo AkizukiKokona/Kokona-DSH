@@ -2,7 +2,7 @@ import { existsSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { contextBridge, ipcRenderer, webFrame, type IpcRendererEvent } from 'electron'
 import { IPC } from '../shared/constants'
-import type { KokonaApi, UpdateInfo } from '../shared/api'
+import type { EditContextState, KokonaApi, UpdateInfo } from '../shared/api'
 import type { AppConfig, RuntimeSnapshot, ShellUpdateInfo, WindowState } from '../shared/types'
 
 const api: KokonaApi = {
@@ -23,6 +23,7 @@ const api: KokonaApi = {
   reportTheme: (theme) => ipcRenderer.send(IPC.reportTheme, theme),
   checkShellUpdate: () => ipcRenderer.invoke(IPC.checkShellUpdate) as Promise<ShellUpdateInfo>,
   openExternal: (url) => ipcRenderer.invoke(IPC.openExternal, url) as Promise<void>,
+  showContextMenu: (state) => ipcRenderer.send(IPC.contextMenu, state),
   window: {
     minimize: () => ipcRenderer.send(IPC.windowControl, 'minimize'),
     maximize: () => ipcRenderer.send(IPC.windowControl, 'maximize'),
@@ -1242,6 +1243,89 @@ function installOpenInAppFix(): void {
   })
 }
 
+/**
+ * Electron ships no default context menu, so a right-click on the composer does nothing
+ * at all. This reports what the click landed on and lets the main process build the
+ * native menu; the renderer never draws a menu of its own, and only the main process can
+ * read the clipboard anyway.
+ *
+ * The gesture is claimed only for text fields and rich-text surfaces. Anything else is
+ * left completely alone, so a plugin that puts its own menu on a message keeps it.
+ */
+const EDIT_MENU_ATTR = 'data-kokona-edit-menu'
+
+/** Input types whose selection APIs are unusable, or which hold nothing editable. */
+const NON_TEXT_INPUTS =
+  /^(?:number|email|date|time|datetime-local|month|week|range|color|file|checkbox|radio|submit|button|reset|image|hidden)$/
+
+function isTextField(element: Element | null): element is HTMLInputElement | HTMLTextAreaElement {
+  if (element instanceof HTMLTextAreaElement) return true
+  return element instanceof HTMLInputElement && !NON_TEXT_INPUTS.test(element.type)
+}
+
+function selectionWithin(element: Element): boolean {
+  const selection = window.getSelection()
+  if (selection === null || selection.isCollapsed || selection.rangeCount === 0) return false
+  return element.contains(selection.getRangeAt(0).commonAncestorContainer)
+}
+
+/**
+ * Null means "not our gesture" — the click is handed back to the page untouched.
+ */
+function describeEditTarget(target: Element): EditContextState | null {
+  const field = target.closest('input, textarea')
+  if (isTextField(field)) {
+    if (field.disabled) return null
+    let hasSelection = false
+    try {
+      hasSelection = field.selectionStart !== field.selectionEnd
+    } catch {
+      // Some input types reject the selection indices outright.
+      hasSelection = false
+    }
+    return {
+      editable: !field.readOnly,
+      hasSelection,
+      hasContent: field.value.length > 0
+    }
+  }
+
+  // A rich-text surface. isContentEditable settles inheritance and contenteditable="false",
+  // which a bare [contenteditable] lookup would get wrong.
+  const rich = target.closest('[contenteditable]')
+  if (rich instanceof HTMLElement && rich.isContentEditable) {
+    return {
+      editable: true,
+      hasSelection: selectionWithin(rich),
+      hasContent: (rich.textContent ?? '').length > 0
+    }
+  }
+
+  return null
+}
+
+function installEditContextMenu(): void {
+  if (document.documentElement.hasAttribute(EDIT_MENU_ATTR)) return
+  document.documentElement.setAttribute(EDIT_MENU_ATTR, '')
+  // Capture phase: read the selection before any page handler can change it.
+  document.addEventListener(
+    'contextmenu',
+    (event) => {
+      const target = event.target instanceof Element ? event.target : null
+      if (target === null) return
+      const state = describeEditTarget(target)
+      if (state === null) return
+      // Right-clicking a field should put the caret where the click landed, which is what
+      // the edit roles act on.
+      const entry = target.closest('input, textarea, [contenteditable]')
+      if (entry instanceof HTMLElement) entry.focus()
+      event.preventDefault()
+      api.showContextMenu(state)
+    },
+    true
+  )
+}
+
 async function bootstrap(): Promise<void> {
   if (!isDshPage()) return
   const start = () => {
@@ -1251,6 +1335,9 @@ async function bootstrap(): Promise<void> {
       })
     }
     observeSettings()
+    // A document-level listener, not DOM injection: it needs to run once, not once per
+    // re-render, so it stays out of the mutation tick below.
+    installEditContextMenu()
     // One tick for the things that must survive React re-renders: the right panel
     // sweep, the brand lockup, the hero copy and the open-in-app hook. Each is
     // guarded by its own cheap check, so a tick after the work is done is a couple

@@ -1055,6 +1055,67 @@ GitHub Actions 会设 `CI=true`，脚本第一步就退出。
 **和 `repack.cmd` 的配合**：`prebuild` 可能加号，所以 `repack.cmd` 在 `npm run pack` **之后**
 重新读一次 `package.json` 再和打出来的 `ProductVersion` 比对，否则会误报「版本不一致」。
 
+## 25. 输入框右键菜单（剪切 / 复制 / 粘贴 / 全选）
+
+**现象**：对着输入框右键**毫无反应**。原因不在 DSH —— **Electron 默认不提供任何右键菜单**，
+`contextmenu` 没人处理，所以点上去就是没有。社区封装大多也没补，所以到哪都这样。
+
+**做法**：用**原生菜单**，动作交给 Electron 自己的 `role`，外壳只负责判断状态。
+
+- `src/preload/index.ts` —— 文档级 `contextmenu` 监听（**捕获阶段**，趁页面还没动选区），判断这次
+  点到了什么，把 `{ editable, hasSelection, hasContent }` 发给主进程。渲染层**不画菜单**，
+  也画不了：只有主进程能读剪贴板。
+- `src/main/ipc.ts` —— `editMenuTemplate(state, clipboardText)` 是**纯函数**，返回菜单模板；
+  `Menu.buildFromTemplate(...).popup({ window })` 弹出。role 作用在**获得焦点的 webContents** 上，
+  所以普通输入框和 contenteditable 都对，而且走控件自己的撤销栈，不是背后改值。
+
+**状态逻辑**：
+
+| 情况 | 剪切 | 复制 | 粘贴 | 全选 |
+|---|---|---|---|---|
+| 可写 · 有选区 · 剪贴板有内容 · 有内容 | ✓ | ✓ | ✓ | ✓ |
+| 可写 · 有选区 · 剪贴板为空 | ✓ | ✓ | ✗ | ✓ |
+| 可写 · 无选区 · 剪贴板有内容 | ✗ | ✗ | ✓ | ✓ |
+| 可写 · 空字段 · 剪贴板为空 | ✗ | ✗ | ✗ | ✗ |
+| 只读（`readOnly`） | 不显示 | ✓ | 不显示 | ✓ |
+| `disabled` | 不弹菜单，手势还给页面 | | | |
+
+- 剪切/复制要**有选区**；粘贴要**可写 + 剪贴板非空**；全选要**有内容**。
+- 全空时菜单照弹、但全是灰的 —— 比「什么都不弹」清楚，用户知道这个功能存在。
+- 只读字段只给 复制 / 全选。
+
+**刻意的取舍**：只在**文本输入**和**contenteditable** 上接管手势，其它地方一律不碰 ——
+插件自己给消息加的右键菜单不会被抢。选中正文想复制，那是插件的活，不是外壳的。
+
+**标签和加速键**：`role` **不会**自带加速键 —— 实测 `accelerator` 是空的，菜单上没有任何按键提示，
+所以显式写了 `CommandOrControl+X/C/V/A`。弹出菜单里的加速键只是**显示**用，不会注册成全局快捷键。
+标签按 `app.getLocale()` 走 zh/en 小表，不依赖 role 的默认文案（实测 zh-CN 出的是 剪切/复制/粘贴/全选）。
+
+**其它细节**：`NON_TEXT_INPUTS` 排除掉 `number`/`date`/`file` 这些选区 API 会抛错的类型；
+`isContentEditable` 而不是裸的 `[contenteditable]`，否则 `contenteditable="false"` 会被误判；
+弹出的 `Menu` 存在模块级变量里 —— 被 GC 掉的菜单可能把窗口一起带走。
+
+**验证**：`npm run typecheck` / `npm run build` 通过。`editMenuTemplate` 写成了**纯函数**，
+所以另外用 esbuild 单独打包它、在真实 Electron 进程里跑了 7 组状态，逐项核对 `enabled`：
+
+```
+writable / selection / clipboard / content   cut:on   copy:on   paste:on   ---  selectall:on
+writable / selection / EMPTY clipboard       cut:on   copy:on   paste:OFF  ---  selectall:on
+writable / no selection / clipboard          cut:OFF  copy:OFF  paste:on   ---  selectall:on
+writable / no selection / empty clip         cut:OFF  copy:OFF  paste:OFF  ---  selectall:on
+writable / EMPTY field / EMPTY clipboard     cut:OFF  copy:OFF  paste:OFF  ---  selectall:OFF
+read-only / no selection / content           copy:OFF  ---  selectall:on
+read-only / selection                        copy:on   ---  selectall:on
+```
+
+加速键缺失正是这一轮实测发现的，不是读代码读出来的。
+
+**坑**：electron-vite 把主进程打成**单个** `out/main/index.js`，**没有** `out/main/ipc.js` ——
+想单独 `require` 一个主进程模块做不到（第一次探针就卡死在这：require 抛异常 → `whenReady`
+回调 reject → 既不写结果也不退出）。要单测主进程模块，得用 esbuild 单独打包一个入口，
+并且给探针加超时兜底。
+
+
 
 
 

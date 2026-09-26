@@ -6,6 +6,21 @@ export interface UpdateInfo {
   channel: string
 }
 
+/**
+ * What a right-click landed on, as far as the edit menu cares.
+ *
+ * The renderer reports the state and the main process decides what to enable, because
+ * only the main process can read the clipboard. The renderer never draws a menu.
+ */
+export interface EditContextState {
+  /** A writable text field or rich-text surface: cut and paste apply. */
+  editable: boolean
+  /** Something is selected, so cut and copy have a subject. */
+  hasSelection: boolean
+  /** The field holds text, so select-all has a subject. */
+  hasContent: boolean
+}
+
 export interface KokonaApi {
   snapshot(): Promise<RuntimeSnapshot>
   getConfig(): Promise<AppConfig>
@@ -24,6 +39,7 @@ export interface KokonaApi {
   reportTheme(theme: 'dark' | 'light'): void
   checkShellUpdate(): Promise<ShellUpdateInfo>
   openExternal(url: string): Promise<void>
+  showContextMenu(state: EditContextState): void
   window: {
     minimize(): void
     maximize(): void
