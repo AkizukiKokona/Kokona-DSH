@@ -483,7 +483,7 @@ body { --dsw-alias-markdown-inline-code: var(--kokona-surface-chip) !important; 
 本轮新增的规矩：
 
 1. **`gh run watch` 每 3 秒重刷整个 job 状态**，一次 `watch` 能吐几千行。要盯构建就轮询 `gh run list --workflow release --limit 2`，别用 watch。
-2. **`gh release download` 不要用**：单流、无进度输出，看起来就是卡死。改成 4 个并发 `curl.exe`（见第 6 节第 6 步），422 MB 约 35 秒；直连慢就换 `gh-proxy.com` 镜像或本机 `127.0.0.1:7897` 代理。
+2. **`gh release download` 可以放心用**，前提是 `HTTPS_PROXY` 已设（见第 40 节）。1.2 GB 的四个产物 85 秒下完。之前认为它「单流、看起来像卡死」是误判 —— 真实原因是它没走代理，0.3 MB/s。
 3. **任何下载/上传都别写成一条长阻塞命令**。用 `Start-Process` 起独立进程或后台 job，然后隔十几秒比对文件大小，把「X / Y MB」报出来 —— 否则用户分不清是真卡还是在跑。
 4. **新版本在 Codeberg 上要先 `POST /releases` 建 release**（推 tag 不会自动建），拿到 release id 才能传资产；同一版本重发才是「先删资产再传」。
 5. `package-lock.json` 的 version 字段从 0.1.0 起就没跟过 `package.json`，`npm ci` 不受影响，别去动它。
@@ -1716,9 +1716,27 @@ $env:Path = ($env:Path -split ';' | Where-Object { $_ -notmatch 'nodejs|npm|pnpm
 
 > 任何涉及安装、启动、依赖解析的改动，验证必须在 `KOKONA_USER_DATA` 隔离 + PATH 无 Node 的环境里做，否则不算验证过。
 
-### 附带发现：本地网络
+### 附带发现：Windows「系统代理」对命令行工具无效
 
-这台机器上 `github.com:443` **不可达**（`api.github.com` 和 `codeberg.org` 正常），所以之前 GitHub 产物下载慢到 25 KB/s。**不是 GitHub 限流**。本地代理在 `127.0.0.1:7897`（verge-mihomo），走代理后 `github.com` 秒通。git 已全局配置该代理。
+这台机器上 GitHub 产物下载长期只有 **0.3 MB/s**。我最初的判断是「`github.com:443` 不可达」，**这是错的**。
+
+真正的原因：**Windows 的系统代理设置只对 WinINET 生效** —— 浏览器、Edge、Electron 读它，`git` / `gh` / `npm` / `node` / `curl` **一概不读**。所以那些工具全是直连出去的，代理软件里一点流量都看不到（YG 就是从代理的流量面板上看出来的）。
+
+代理端口是 **`127.0.0.1:7897`**（verge-mihomo），注册表 `ProxyServer` 也是这个。**7890 没有任何程序监听**（连接被积极拒绝）。
+
+修法是把代理写成真正的环境变量，而不是依赖系统代理：
+
+```powershell
+[Environment]::SetEnvironmentVariable('HTTP_PROXY',  'http://127.0.0.1:7897', 'User')
+[Environment]::SetEnvironmentVariable('HTTPS_PROXY', 'http://127.0.0.1:7897', 'User')
+[Environment]::SetEnvironmentVariable('NO_PROXY', 'localhost,127.0.0.1,::1', 'User')
+```
+
+git 另外单独配了 `http.proxy` / `https.proxy`。
+
+效果：**0.3 MB/s → 12–14 MB/s**，1.2 GB 的产物 85 秒下完。
+
+还有一个我自己造的低级错误：某次下载任务里我把代理设成了 `$env:GH_PROXY` —— **根本没有这个变量**，`gh` 不认，那次下载照样裸奔。
 
 ### 隐私
 
