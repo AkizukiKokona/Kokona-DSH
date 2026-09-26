@@ -19,7 +19,7 @@ const PAGE = `<!doctype html>
 :root{
   --kokona-surface-glass: rgba(255,255,255,.72);
   --kokona-surface-float: rgba(255,255,255,.85);
-  --kokona-surface-menu: rgba(255,255,255,.9);
+  --kokona-surface-menu: rgba(255,255,255,.86);
   --kokona-surface-selected: rgba(0,0,0,.08);
   --we-blur: 16px; --we-saturate: 1.8;
   --dsw-alias-bg-base: #ffffff;
@@ -156,11 +156,11 @@ async function main() {
   lines.push(`   compaction bg    : ${a.compactionBg}   (must be transparent)`)
   lines.push(`   compaction blur  : ${a.compactionBackdrop}`)
   lines.push(`   banner bg / blur : ${a.bannerBg} / ${a.bannerBackdrop}`)
-  lines.push(`   hover card bg    : ${a.hoverCardBg}   (must be rgba(255, 255, 255, 0.9) - same as the add menu)`)
+  lines.push(`   hover card bg    : ${a.hoverCardBg}   (must be rgba(255, 255, 255, 0.86) - same as the add menu)`)
   lines.push(`   hover preview bg : ${a.hoverPreviewBg}   (same)`)
-  lines.push(`   cmd menu bg      : ${a.cmdMenuBg}   (must be rgba(255, 255, 255, 0.9) - it had no background at all)`)
+  lines.push(`   cmd menu bg      : ${a.cmdMenuBg}   (must be rgba(255, 255, 255, 0.86) - it had no background at all)`)
   lines.push(`   cmd menu blur    : ${a.cmdMenuBlur}`)
-  lines.push(`   ADD menu bg      : ${a.addMenuBg}   (must be rgba(255, 255, 255, 0.9) - the real one, _menu + _viewport)`)
+  lines.push(`   ADD menu bg      : ${a.addMenuBg}   (must be rgba(255, 255, 255, 0.86) - the real one, _menu + _viewport)`)
   lines.push(`   ADD menu blur    : ${a.addMenuBlur}`)
   lines.push(`   diff added line  : ${a.diffLineBg}   (must NOT be the menu surface - _add collides with the diff row)`)
   lines.push(`   diff +n gutter   : ${a.diffNumberBg}   (must NOT be the menu surface either)`)
