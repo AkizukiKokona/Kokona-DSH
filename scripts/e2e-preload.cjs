@@ -115,15 +115,35 @@ async function main() {
     field.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true, clientX: 40, clientY: 40 }))
     await new Promise((r) => setTimeout(r, 300))
     const menu = document.getElementById('kokona-edit-menu')
+    const item = menu ? menu.querySelector('.kokona-edit-item') : null
+    let labelKeyGap = null
+    let overlaps = null
+    if (item && item.children.length >= 2) {
+      const labelBox = item.children[0].getBoundingClientRect()
+      const keyBox = item.children[1].getBoundingClientRect()
+      labelKeyGap = Math.round(keyBox.left - labelBox.right)
+      overlaps = keyBox.left < labelBox.right
+    }
+    const menuStyle = menu ? getComputedStyle(menu) : null
     return {
       present: menu !== null,
-      items: menu ? Array.from(menu.querySelectorAll('.kokona-edit-item')).map((i) => i.textContent + ' [' + i.dataset.enabled + ']') : []
+      items: menu ? Array.from(menu.querySelectorAll('.kokona-edit-item')).map((i) => i.textContent + ' [' + i.dataset.enabled + ']') : [],
+      menuWidth: menu ? Math.round(menu.getBoundingClientRect().width) : null,
+      itemWidth: item ? Math.round(item.getBoundingClientRect().width) : null,
+      labelKeyGap,
+      overlaps,
+      backdrop: menuStyle ? (menuStyle.backdropFilter || menuStyle.webkitBackdropFilter) : null,
+      bg: menuStyle ? menuStyle.backgroundColor : null
     }
   })()`)
   lines.push('')
   lines.push('B. 右键输入框')
   lines.push(`   menu present     : ${b.present}`)
   lines.push(`   items            : ${b.items.join(' | ')}`)
+  lines.push(`   menu / item width: ${b.menuWidth} / ${b.itemWidth} px`)
+  lines.push(`   label->key gap   : ${b.labelKeyGap} px`)
+  lines.push(`   OVERLAP          : ${b.overlaps}   (must be false)`)
+  lines.push(`   backdrop / bg    : ${b.backdrop} / ${b.bg}`)
 
   // C: right-click a widget -> must stay out of it.
   await win.webContents.executeJavaScript(CLOSE_MENU)

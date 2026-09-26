@@ -1257,6 +1257,28 @@ hover 的 `--dsw-alias-interactive-bg-hover-solid` 也是不透明 token，一�
 - D/E 组显示的菜单条目来自探针**写死的桩数据**，不是真实状态表 —— 状态表由 `editMenuEntries()`
   决定，另有单独的探针覆盖。这里测的是**渲染和手势**，不是判定逻辑。
 
+## 29. 右键菜单的间距与模糊（按 YG 的反馈调过一轮）
+
+**间距**：原来是 `min-width: 176px` + 快捷键 `margin-left: auto` 顶到最右，标签和快捷键之间空出
+约 82px。YG 说太大。改成 `min-width: 112px` + item `gap: 12px`，实测渲染 **27px**。
+
+**关键：不会叠。** `min-width` 是**下限**不是定宽 —— 内容更宽时盒子会自己长，所以缩窄是安全的。
+另外给标签和快捷键都加了 `white-space: nowrap`。注意标签那个类 `kokona-edit-label` 之前**根本没挂**
+（`openEditMenu` 建的是个裸 `<span>`），规则等于没写 —— 加规则的时候顺手确认了这一点。
+探针里加了 `label->key gap` 和 `OVERLAP` 两个**几何**断言，以后改样式能直接看出有没有挤到一起。
+
+**模糊**：原来是 `blur(var(--we-sidebar-blur, 16px)) saturate(var(--we-sidebar-saturate, 1.3))` ——
+而 `--we-sidebar-blur` 在 body 层级不一定有值，实际经常落到 16px 兜底，看着跟输入框一样平。
+YG 要的是「侧栏那种质感，但别那么深」。改成从**玻璃滑杆**派生：
+
+```css
+backdrop-filter: blur(calc(var(--we-blur, 16px) * 1.8)) saturate(calc(var(--we-saturate, 1.8) * 1.15)) brightness(1.03);
+```
+
+默认值下算出来 `blur(28.8px) saturate(2.07) brightness(1.03)`（探针实测）。和面板/输入框的 16px
+拉开一档，又远没到侧栏自己那个 172px（那个会把壁纸糊成一张不透明的纸）。跟着 YG 的「玻璃」滑杆走，
+他调滑杆时菜单一起变。压缩行保持 16px 没动，所以菜单和面板现在是两种质感，能区分开。
+
 
 
 

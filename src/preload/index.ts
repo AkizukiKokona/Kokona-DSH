@@ -1376,9 +1376,13 @@ function describeEditTarget(target: Element, x: number, y: number): EditContextS
 
 /**
  * The menu surface. A native menu cannot be styled at all — the OS paints it — so this is
- * drawn in the page to get the same frosted material as the bottom dock and the right
- * panel, by reusing exactly their recipe (the 侧栏 tint over the glass blur). Only the
- * surface is custom: the actions are still Electron's own.
+ * drawn in the page to get the same frosted material as the dock and the right panel. Only
+ * the surface is custom: the actions are still Electron's own.
+ *
+ * The frost is the sidebar's kind of mica, but not its depth: the sidebar's own radius (the
+ * 侧栏模糊 slider) frosts the wallpaper into an opaque sheet, which is wrong for a menu that
+ * has to stay legible over whatever it covers. Deriving from the 玻璃 slider instead keeps
+ * the menu tied to the same control as the composer while sitting a clear step above it.
  */
 const EDIT_MENU_ID = 'kokona-edit-menu'
 const EDIT_MENU_STYLE_ID = 'kokona-edit-menu-style'
@@ -1386,14 +1390,14 @@ const EDIT_MENU_STYLE = `
 #${EDIT_MENU_ID} {
   position: fixed;
   z-index: 2147483000;
-  min-width: 176px;
+  min-width: 112px;
   padding: 4px;
   margin: 0;
   border-radius: 10px;
   border: 1px solid color-mix(in srgb, var(--we-sidebar-color, #ffffff) 26%, transparent);
   background-color: color-mix(in srgb, var(--we-sidebar-color, #ffffff) var(--we-sidebar-tint, 20%), transparent);
-  backdrop-filter: blur(var(--we-sidebar-blur, 16px)) saturate(var(--we-sidebar-saturate, 1.3)) brightness(var(--we-glass-brightness, 1.04)) contrast(1.01);
-  -webkit-backdrop-filter: blur(var(--we-sidebar-blur, 16px)) saturate(var(--we-sidebar-saturate, 1.3)) brightness(var(--we-glass-brightness, 1.04)) contrast(1.01);
+  backdrop-filter: blur(calc(var(--we-blur, 16px) * 1.8)) saturate(calc(var(--we-saturate, 1.8) * 1.15)) brightness(1.03);
+  -webkit-backdrop-filter: blur(calc(var(--we-blur, 16px) * 1.8)) saturate(calc(var(--we-saturate, 1.8) * 1.15)) brightness(1.03);
   box-shadow: 0 12px 32px rgba(0, 0, 0, .28), 0 2px 8px rgba(0, 0, 0, .16);
   color: inherit;
   font-size: 13px;
@@ -1411,7 +1415,7 @@ const EDIT_MENU_STYLE = `
 #${EDIT_MENU_ID} .kokona-edit-item {
   display: flex;
   align-items: center;
-  gap: 18px;
+  gap: 12px;
   width: 100%;
   padding: 7px 10px;
   border: 0;
@@ -1426,7 +1430,10 @@ const EDIT_MENU_STYLE = `
   background-color: var(--kokona-surface-selected, color-mix(in srgb, currentColor 14%, transparent));
 }
 #${EDIT_MENU_ID} .kokona-edit-item[data-enabled='false'] { opacity: .38; }
-#${EDIT_MENU_ID} .kokona-edit-key { margin-left: auto; opacity: .55; font-size: 12px; }
+/* nowrap on both, with the key pushed to the far edge. The box is a min-width, so it grows to
+   fit instead of letting the label and the shortcut run into each other. */
+#${EDIT_MENU_ID} .kokona-edit-label { white-space: nowrap; }
+#${EDIT_MENU_ID} .kokona-edit-key { margin-left: auto; padding-left: 2px; white-space: nowrap; opacity: .55; font-size: 12px; }
 `
 
 let editMenuElement: HTMLElement | null = null
@@ -1477,6 +1484,7 @@ function openEditMenu(entries: EditMenuEntry[], x: number, y: number): void {
     item.dataset.enabled = String(entry.enabled)
     item.disabled = !entry.enabled
     const label = document.createElement('span')
+    label.className = 'kokona-edit-label'
     label.textContent = entry.label
     const key = document.createElement('span')
     key.className = 'kokona-edit-key'
