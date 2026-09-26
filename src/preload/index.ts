@@ -342,6 +342,37 @@ body[data-we-sidebar-glass] [class*="_bottomPanel"] {
   backdrop-filter: blur(10px) saturate(1.6) brightness(1.03) !important;
   -webkit-backdrop-filter: blur(10px) saturate(1.6) brightness(1.03) !important;
 }
+/* The ask-user card (the one this shell's question tool renders into) paints itself with
+   --dsw-specific-input-major, which is opaque white in light mode — the card reads as a solid
+   slab over the wallpaper while every other surface is glass. Remapping the token ON the card
+   is enough: custom properties resolve at computed-value time, so the card's own
+   background: var(--dsw-specific-input-major) and any descendant that reads the same token
+   both follow. No need to override each of them.
+   Anchored on descendants that only this card has: _fieldInput is its free-text field, _strip
+   its warning strip. Both question variants are covered. */
+[class*="_card"]:has([class*="_fieldInput"]),
+[class*="_card"]:has([class*="_strip"]) {
+  --dsw-specific-input-major: var(--kokona-surface-glass);
+  background-color: var(--kokona-surface-glass) !important;
+  backdrop-filter: blur(var(--we-blur, 16px)) saturate(var(--we-saturate, 1.8)) !important;
+  -webkit-backdrop-filter: blur(var(--we-blur, 16px)) saturate(var(--we-saturate, 1.8)) !important;
+}
+/* The 后台任务 dropdown (dsh-client-ui-jobs) is a flat --dsw-specific-menu panel with
+   backdrop-filter: var(--dsw-menu-backdrop-filter), which resolves to none here — so the menu
+   and the job detail it expands sit on the same flat tone and read as one block. Two levels:
+   the menu becomes the floating surface (same token and frost as the right-click edit menu, so
+   the two dropdowns match), and the expanded detail gets the softer, recessed surface so the
+   output clearly sits inside the menu rather than merging with the list.
+   Anchored on _sectionHeader, which only this module's menu has. */
+[class*="_menu"]:has([class*="_sectionHeader"]) {
+  background-color: var(--kokona-surface-float) !important;
+  backdrop-filter: blur(calc(var(--we-blur, 16px) * 1.8)) saturate(calc(var(--we-saturate, 1.8) * 1.15)) brightness(1.03) !important;
+  -webkit-backdrop-filter: blur(calc(var(--we-blur, 16px) * 1.8)) saturate(calc(var(--we-saturate, 1.8) * 1.15)) brightness(1.03) !important;
+}
+[class*="_menu"]:has([class*="_sectionHeader"]) [class*="_panel"] {
+  background-color: var(--kokona-surface-soft) !important;
+  border-radius: var(--dsw-radius-md, 8px) !important;
+}
 /* The sidebar brand slot. The official whale and wordmark are inline SVGs with no
    src, so the replacement is injected as an inline SVG element by installBrand():
    a data: URL would be subject to the page's CSP, and an external image cannot
