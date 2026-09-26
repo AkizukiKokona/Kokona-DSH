@@ -235,26 +235,27 @@ html [data-agent-preset-id][class*="_cardSelectionDisabled"] { background-color:
 button[class*="_toBottom"] { background-color: var(--kokona-surface-glass) !important; backdrop-filter: blur(var(--we-blur, 16px)) saturate(var(--we-saturate, 1.8)); }
 button[class*="_toBottom"]:hover { background-color: var(--kokona-surface-selected) !important; }
 /* The compaction row (「上下文已压缩」). Collapsed it is an ordinary button on the
-   transcript, but once expanded the core makes its header position:sticky and fills it
-   with --dsw-alias-bg-base — an opaque base colour the wallpaper plugin never re-tints and
-   the transcript remap above does not cover — so the header becomes a solid bar riding over
-   the glass. It only shows once it actually sticks, which is why it looked intermittent.
-   A sticky bar has to occlude the text sliding under it, so it cannot just be made
-   transparent: give it the composer's veil plus a backdrop blur, which hides what is behind
-   it while keeping the material. Its hover fill is an opaque token too. */
+   transcript, but once expanded the core makes its header position:sticky with
+   background: var(--dsw-alias-bg-base) and border-radius: 0 — an opaque base colour the
+   wallpaper plugin never re-tints and the transcript remap above does not cover. That is the
+   white rectangle riding over the glass.
+   It is forced fully transparent rather than frosted: YG wants no plate under the header at
+   all. The tradeoff is his call and it is real — the header is sticky, so content scrolling
+   beneath it stays visible through the text instead of being masked. */
 [class*="_compactionRow"]:has([class*="_compactionBody"]) [class*="_compactionButton"] {
-  background-color: var(--kokona-surface-glass) !important;
-  backdrop-filter: blur(var(--we-blur, 16px)) saturate(var(--we-saturate, 1.8));
-  -webkit-backdrop-filter: blur(var(--we-blur, 16px)) saturate(var(--we-saturate, 1.8));
+  background: transparent !important;
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+  box-shadow: none !important;
 }
-[class*="_compactionRow"]:has([class*="_compactionBody"]) [class*="_compactionButton"]:hover { background-color: var(--kokona-surface-selected) !important; }
-/* The code-block banner inside the expanded body is sticky as well, and sticks directly
-   under that header, so it has the same opaque fill to answer for. data-code-block-banner
-   is authored by the core rather than hashed. */
+[class*="_compactionRow"]:has([class*="_compactionBody"]) [class*="_compactionButton"]:hover { background: transparent !important; }
+/* The code-block banner inside the expanded body is sticky too and carries the same opaque
+   fill. data-code-block-banner is authored by the core rather than hashed. */
 [class*="_compactionBody"] [data-code-block-banner] {
-  background-color: var(--kokona-surface-glass) !important;
-  backdrop-filter: blur(var(--we-blur, 16px)) saturate(var(--we-saturate, 1.8));
-  -webkit-backdrop-filter: blur(var(--we-blur, 16px)) saturate(var(--we-saturate, 1.8));
+  background: transparent !important;
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+  box-shadow: none !important;
 }
 /* TurnTriggerNodeView — the attribution notice above a turn that is not from a
    human (webhook, goal, subagent, schedule) — is a <section data-turn-trigger>
@@ -1655,6 +1656,22 @@ function buildFsNote(original: string): HTMLElement | null {
   return note.childElementCount > 0 ? note : null
 }
 
+/**
+ * Where a note goes. The core renders a failed tool call as a collapsed card: a role=button
+ * trigger (the element owning aria-expanded) holding the title and the error summary as flex
+ * children, plus a body that only mounts once expanded. A note appended next to the error
+ * text therefore becomes a flex item on the header's own line, reads as part of the header,
+ * and sits above a body that may well be empty. Anchoring on the card instead — the trigger's
+ * parent — drops it below the whole thing as its own block. Outside a card the parent is
+ * already the right place, so nothing changes for plain prose.
+ */
+function noteAnchor(node: Node): Element | null {
+  const owner = node.parentElement
+  if (owner === null) return null
+  const trigger = owner.closest('[aria-expanded]')
+  return trigger?.parentElement ?? owner
+}
+
 function installFsErrorNotes(): void {
   const transcript = document.querySelector('[data-conversation-scroll]')
   if (!(transcript instanceof HTMLElement)) return
@@ -1674,7 +1691,7 @@ function installFsErrorNotes(): void {
   for (let node = walker.nextNode(); node !== null; node = walker.nextNode()) {
     const text = node.nodeValue ?? ''
     if (text.includes('cannot modify "') === false && text.includes('cannot edit "') === false) continue
-    const owner = node.parentElement
+    const owner = noteAnchor(node)
     if (owner === null || owner.hasAttribute(FS_NOTE_SOURCE_ATTR)) continue
     const note = buildFsNote(text)
     if (note === null) continue

@@ -1277,7 +1277,44 @@ backdrop-filter: blur(calc(var(--we-blur, 16px) * 1.8)) saturate(calc(var(--we-s
 
 默认值下算出来 `blur(28.8px) saturate(2.07) brightness(1.03)`（探针实测）。和面板/输入框的 16px
 拉开一档，又远没到侧栏自己那个 172px（那个会把壁纸糊成一张不透明的纸）。跟着 YG 的「玻璃」滑杆走，
-他调滑杆时菜单一起变。压缩行保持 16px 没动，所以菜单和面板现在是两种质感，能区分开。
+他调滑杆时菜单一起变。
+
+## 30. 压缩行「没有底」+ 报错注释的位置（YG 第二轮反馈）
+
+### 压缩行：要的是**完全透明**，不是毛玻璃
+
+第 27 节我给的 `--kokona-surface-glass` 是 **72% 白** —— 那还是个底，YG 要的是「没有底」。
+现在 `background: transparent !important` + `backdrop-filter: none !important`（`:hover` 也要，
+核心的 hover 用的是 `--dsw-alias-interactive-bg-hover-solid`，同样是不透明 token）。
+展开体里的 `[data-code-block-banner]` 一起处理。
+
+**代价要说清楚**：这个表头是 `position: sticky` 的，去掉底之后从下面滚过去的文字会**透过来**，
+和表头文字叠在一起。YG 明确要没有底，所以就这么做 —— 别再自作主张加回去。
+
+### 报错注释：之前插错了地方
+
+核心把失败的工具调用渲染成一个折叠卡片（`dsh-client-ui-tool/lib/client.js`）：
+
+```js
+div.card
+  div.root[data-sample][data-state="error"][data-expandable][aria-expanded][role=button]  ← 表头，可点
+    span.title / span.sep / span.summary     ← 报错文本在 span.summary 里
+  div.bodyWrap                                ← 只有展开时才 mount
+```
+
+之前是 `node.parentElement.insertAdjacentElement('afterend', note)` —— 插在 `span.summary` 后面，
+也就是**表头内部**。两个后果，都是 YG 报的：
+
+1. `div.root` 是 **flex 行**，我那个 `<div>` 变成 flex item，跟英文挤在**同一行**（YG：中英应该分两行）；
+2. 它在 `role=button` 的表头里，永远在展开体**上面**，而展开体本身可能是空的（YG：错误写上面、
+   展开是空白）。
+
+改成 `noteAnchor()`：从文本节点往上找最近的 `[aria-expanded]`（折叠触发器 —— 标准属性，不是哈希类名），
+取其 **parent**（即 `div.card`），注释插在卡片**外面** —— 表头之下、展开体之外，自己成块。
+不在卡片里时退回 `parentElement`，纯正文场景行为不变。
+
+**探针加了三个断言**：`note after card`（必须 true）、`note INSIDE card`（必须 false）、
+`note count`（两个报错就该有两条注释）。假页面里也加了一个仿造的卡片结构。
 
 
 

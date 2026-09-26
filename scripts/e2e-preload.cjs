@@ -35,6 +35,12 @@ body{margin:0;font:14px system-ui}
     <div class="Sixlwa_compactionBody"><div data-code-block-banner>banner</div><p>已压缩 12 条历史记录（约 8000 tokens）</p></div>
   </div>
   <p id="prose">这是一段可以选中的正文文字，用来测试右键菜单。</p>
+  <div class="X_card" id="card">
+    <div class="X_root" data-state="error" aria-expanded="false" role="button">
+      <span class="X_title">edit</span>
+      <span class="X_summary">Error: cannot modify "D:\\kokonadsh\\src\\shared\\errors.ts": file has not been read — read the file, then retry</span>
+    </div>
+  </div>
   <p id="err">Error: cannot modify "D:\\kokonadsh\\src\\shared\\constants.ts": file has not been read — read the file, then retry</p>
   <textarea id="field" rows="3"></textarea>
 </div>
@@ -88,23 +94,29 @@ async function main() {
   // A: the note under the core error, plus the compaction glass.
   const a = await win.webContents.executeJavaScript(`(() => {
     const note = document.querySelector('[data-kokona-fs-note]')
+    const card = document.getElementById('card')
     const btn = document.querySelector('[class*="_compactionButton"]')
     const banner = document.querySelector('[data-code-block-banner]')
     const cs = getComputedStyle(btn)
     return {
       notePresent: note !== null,
+      noteCount: document.querySelectorAll('[data-kokona-fs-note]').length,
       noteLines: note ? note.children.length : 0,
       noteText: note ? note.textContent : '',
+      noteAfterCard: card ? card.nextElementSibling !== null && card.nextElementSibling.hasAttribute('data-kokona-fs-note') : null,
+      noteInsideCard: card ? card.querySelector('[data-kokona-fs-note]') !== null : null,
       compactionBg: cs.backgroundColor,
       compactionBackdrop: cs.backdropFilter || cs.webkitBackdropFilter,
       bannerBg: banner ? getComputedStyle(banner).backgroundColor : null,
       bannerBackdrop: banner ? (getComputedStyle(banner).backdropFilter || '-') : null
     }
   })()`)
-  lines.push('A. 报错下方注释 + 压缩行毛玻璃')
-  lines.push(`   note present     : ${a.notePresent}   lines=${a.noteLines}`)
+  lines.push('A. 报错下方注释 + 压缩行底色')
+  lines.push(`   note present     : ${a.notePresent}   lines=${a.noteLines}   count=${a.noteCount}   (count must be 2)`)
   lines.push(`   note text        : ${a.noteText}`)
-  lines.push(`   compaction bg    : ${a.compactionBg}`)
+  lines.push(`   note after card  : ${a.noteAfterCard}   (must be true - below the card, not in its header)`)
+  lines.push(`   note INSIDE card : ${a.noteInsideCard}   (must be false)`)
+  lines.push(`   compaction bg    : ${a.compactionBg}   (must be transparent)`)
   lines.push(`   compaction blur  : ${a.compactionBackdrop}`)
   lines.push(`   banner bg / blur : ${a.bannerBg} / ${a.bannerBackdrop}`)
 
