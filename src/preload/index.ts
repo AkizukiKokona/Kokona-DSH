@@ -1612,14 +1612,9 @@ function installEditContextMenu(): void {
  * string with no stable hook of its own.
  */
 const FS_NOTE_ATTR = 'data-kokona-fs-note'
-const FS_NOTE_SOURCE_ATTR = 'data-kokona-fs-note-source'
 const FS_HINT_NEEDLE = 'file has not been read'
 const FS_HINT_MESSAGE =
   '这个报错未必是真的「没读过」。文件观测记录只存在核心进程的内存里，核心重启或插件重载后会清空，所以重启前读过的文件也会报这个。重读一次该文件再试即可。'
-
-/** Re-walk the transcript at most this often: a long conversation has a lot of text nodes. */
-const FS_HINT_INTERVAL_MS = 2000
-let fsHintCheckedAt = 0
 
 /**
  * Only shapes that translate completely are listed. A message whose middle is supplied by
@@ -1717,27 +1712,52 @@ function installFsErrorNotes(): void {
   const transcript = document.querySelector('[data-conversation-scroll]')
   if (!(transcript instanceof HTMLElement)) return
 
-  // A note whose source element is gone was orphaned by a re-render. Drop it, so the scan
-  // below can place a fresh one rather than leaving a copy behind.
-  for (const stale of Array.from(transcript.querySelectorAll(`[${FS_NOTE_ATTR}]`))) {
-    if (stale.previousElementSibling?.hasAttribute(FS_NOTE_SOURCE_ATTR) === true) continue
-    stale.remove()
+  // Placement is idempotent and self-validating: the note is correct when it is already the
+  // element that follows its source. That replaces the two things that used to make it vanish
+  // for good — a one-way "handled" flag on the source, and a 2s throttle on the scan. React
+  // re-renders the transcript constantly, and when it reuses the card element the flag survived
+  // the re-render, so the scan skipped that card forever while the sweep had already dropped
+  // its note. That is exactly the reported behaviour: the note is there on the first expand,
+  // disappears a moment later, and comes back after collapsing and expanding — which rebuilds
+  // the card and clears the flag — only to go blank again.
+  const keep = new Set<Element>()
+
+  const place = (owner: Element | null, text: string): void => {
+    if (owner === null) return
+    const next = owner.nextElementSibling
+    if (next !== null && next.hasAttribute(FS_NOTE_ATTR)) {
+      keep.add(next)
+      return
+    }
+    const note = buildFsNote(text)
+    if (note === null) return
+    owner.insertAdjacentElement('afterend', note)
+    keep.add(note)
   }
 
-  const now = Date.now()
-  if (now - fsHintCheckedAt < FS_HINT_INTERVAL_MS) return
-  fsHintCheckedAt = now
+  // The card the core renders a tool failure in. Cheap to query, so this pass runs every tick.
+  // Anchored through noteAnchor rather than on the matched element itself: the match is the
+  // inner _root, and the walk's anchor for the same text is the outer card, so placing against
+  // the raw match would put one note inside the card and a second one after it.
+  for (const card of Array.from(transcript.querySelectorAll('[data-state="error"][aria-expanded]'))) {
+    const text = card.textContent ?? ''
+    if (text.includes('cannot modify "') === false && text.includes('cannot edit "') === false) continue
+    place(noteAnchor(card), text)
+  }
 
+  // Plain prose outside a card, which only the walk can find. Reading nodeValue is cheap; the
+  // note is built for the matching node alone. The two passes overlap for a card's own text —
+  // place() is idempotent, so the second call just re-registers the note it already found.
   const walker = document.createTreeWalker(transcript, NodeFilter.SHOW_TEXT)
   for (let node = walker.nextNode(); node !== null; node = walker.nextNode()) {
     const text = node.nodeValue ?? ''
     if (text.includes('cannot modify "') === false && text.includes('cannot edit "') === false) continue
-    const owner = noteAnchor(node)
-    if (owner === null || owner.hasAttribute(FS_NOTE_SOURCE_ATTR)) continue
-    const note = buildFsNote(text)
-    if (note === null) continue
-    owner.setAttribute(FS_NOTE_SOURCE_ATTR, '')
-    owner.insertAdjacentElement('afterend', note)
+    place(noteAnchor(node), text)
+  }
+
+  // Anything left over was orphaned by a re-render.
+  for (const note of Array.from(transcript.querySelectorAll(`[${FS_NOTE_ATTR}]`))) {
+    if (keep.has(note) === false) note.remove()
   }
 }
 

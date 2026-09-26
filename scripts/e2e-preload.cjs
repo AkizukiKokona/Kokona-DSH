@@ -170,6 +170,28 @@ async function main() {
   lines.push(`   htmlLang / navigator  : ${a2.htmlLang} / ${a2.navLang}`)
   lines.push(`   zh node count         : ${a2.zhNodes}`)
 
+  // A3: the note must survive a re-render. Deleting it here stands in for React dropping the
+  // injected sibling while keeping the card element; the old code could not recover from that
+  // (a 2s throttle plus a one-way "handled" flag that survived the re-render), which is the
+  // reported bug - the output went blank a moment after expanding and only came back when the
+  // card was rebuilt by collapsing and expanding it.
+  const a3 = await win.webContents.executeJavaScript(`(async () => {
+    const card = document.getElementById('card')
+    const before = card.nextElementSibling
+    if (before !== null) before.remove()
+    await new Promise((r) => setTimeout(r, 700))
+    const after = card.nextElementSibling
+    return {
+      cardStillThere: document.getElementById('card') === card,
+      cameBack: after !== null && after.hasAttribute('data-kokona-fs-note'),
+      count: document.querySelectorAll('[data-kokona-fs-note]').length
+    }
+  })()`)
+  lines.push('A3. 注释被重渲染抹掉后必须自己回来')
+  lines.push(`   card element reused  : ${a3.cardStillThere}   (the case the old flag survived)`)
+  lines.push(`   came back in 1 tick  : ${a3.cameBack}   (must be true - this is the blank-output bug)`)
+  lines.push(`   note count           : ${a3.count}   (must be 2)`)
+
   // B: right-click a textarea.
   const b = await win.webContents.executeJavaScript(`(async () => {
     const field = document.getElementById('field')
