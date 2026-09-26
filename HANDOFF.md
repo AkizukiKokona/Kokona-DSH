@@ -1629,7 +1629,8 @@ README 里「内置基线内核让首次启动可以离线完成」这句话当�
 | profile | `src/main/core/profile.ts` | 新增 `seedProfile()`：有内置副本就直接铺开，不跑模板、不装插件 |
 | 包管理器 | `src/main/core/shims.ts` | 在 `<userData>/bin` 写 `node.cmd` / `pnpm.cmd`，由内置 Node 驱动；`buildCoreEnv` **追加**到 PATH |
 | 终端 | `src/main/terminal.ts` | `dsh` 包装器直接用内置 Node 跑 `bin.js`，不依赖 PATH 里的 `node` |
-| 构建 | `scripts/prepare-baseline.mjs` | vendor 内核和 pnpm |
+| 构建 | `scripts/prepare-baseline.mjs` | 重建全部五棵树：内核、Node、npm、pnpm、含插件的 profile |
+| CI | `.github/workflows/release.yml` | 构建前必须跑 `npm run prepare:baseline`，否则发出空包 |
 
 `resources/runtime-baseline`、`profile-seed`、`node`、`npm`、`pnpm` 全在 `.gitignore` 里 —— 构建产物。
 
@@ -1668,6 +1669,31 @@ unsupported Electron runtime fingerprint: Node 22.22.0, V8 14.0.365.10-electron.
 为此加了 `KOKONA_USER_DATA` 覆盖（`src/main/index.ts`）—— 测试需要它，双开安装也需要它。
 
 **教训**：测试方法本身也会错，而且错了会伪装成"应用启动失败"。测试没写日志这件事本身就是线索。
+
+### 打包脚本（`scripts/prepare-baseline.mjs`）
+
+一条命令重建安装包需要的**全部五棵树**：
+
+```sh
+npm run prepare:baseline            # 最新内核
+npm run prepare:baseline 0.1.7-rc.2 # 指定版本
+```
+
+产出 `runtime-baseline`（内核）、`node`、`npm`、`pnpm`、`profile-seed`（含四个插件）。全部 gitignore —— 它们是构建产物。
+
+**CI 必须跑这一步。** 工作流从干净克隆构建，不跑就会发出没有内置资源的包 —— 和 1.1.0 一样的死法，只是换了条路。已经加进 `.github/workflows/release.yml`。
+
+脚本里三个只有**实跑**才会暴露的坑：
+
+1. `fresh()` 会清空目标目录，而 pnpm 的复制源就在目标目录里 —— 它删掉了自己的源。改成先装到 `.pnpm-staging` 再搬。
+2. pnpm 的入口点在 `package.json` 的 `bin` 字段里，且**跨大版本变过**：有的版本是 `.cjs`，12.x 是平台二进制 `pnpm.exe`。macOS/Linux 上那个二进制**没有扩展名**，所以 `shims.ts` 按脚本扩展名判断，不是按 `.exe`。
+3. profile **必须用 pnpm 装**，不能用 npm —— 这几个插件在内核的 UI 包上声明了重叠的 peer，npm 直接 ERESOLVE 拒绝，pnpm 能解。而且应用自己也是用 pnpm 装的。插件版本**钉死**，不用 `latest`。
+
+### 踩到的坑 3：`git add -A` 会把打包产物吞进仓库
+
+`release-test/` 和 `release-1.1.1/`（各约 700 MB）不在 `.gitignore` 里，一次 `git add -A` 暂存了 **29988 个文件**，`.git` 从 3 MB 涨到 **339 MB**，提交还真的完成了。
+
+修法：`git reset --soft <干净提交>` 之后**必须再来一次 `git reset`（mixed）** —— 只做 soft 的话索引里还留着垃圾，`git rm --cached` 会因为「暂存内容与文件和 HEAD 都不同」而失败。mixed reset 把索引拉回那个没有垃圾的提交，再 `git add -A` 时 `.gitignore` 里的 `release-*/` 才生效。最后 `git reflog expire --expire=now --all` + `git gc --prune=now` 收回空间。
 
 ### 干净机器验证方法
 
