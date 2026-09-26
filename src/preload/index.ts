@@ -176,7 +176,7 @@ html [class*="_panel"]:has([class*="_navList"]) [class*="_themeCube"][class*="_s
 html [class*="_panel"]:has([class*="_navList"]) [class*="_themeCube"][aria-pressed="true"] { background-color: var(--kokona-surface-selected) !important; border-color: #ffffff !important; border-width: 2px !important; box-shadow: 0 0 0 1px var(--kokona-selected-ring), 0 6px 18px rgba(0, 0, 0, 0.18) !important; }
 [class*="_newSession"]:not([class*="_newSession"] *) { background-color: var(--kokona-surface-glass) !important; }
 [class*="_presented"] [class*="_file"]:not([class*="_file"] *) { background-color: var(--kokona-surface-chip) !important; }
-[class*="_tools"] [class*="_add"]:not([class*="_add"] *) { background-color: var(--kokona-surface-soft) !important; }
+[class*="_tools"] [class*="_add"]:not([class*="_add"] *) { background-color: var(--kokona-surface-float) !important; }
 /* Inline code used to be painted here with a blanket code:not(pre code) chip.
    That also caught the <code> elements that are *labels* rather than code: the
    update panel's version strings, the Agent preset card's id, and the turn-error

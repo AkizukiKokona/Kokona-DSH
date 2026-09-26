@@ -2,6 +2,10 @@ import type { RuntimeSnapshot } from '../../shared/types'
 import type { UpdateInfo } from '../../shared/api'
 import { DISPLAY_NAME } from '../../shared/constants'
 import iconUrl from './assets/kokona.png'
+// The same lockup the preload injects into the sidebar. Raw, so it can be inlined as a real
+// element: the artwork is a fixed-size SVG with an embedded raster, and only an inline element
+// lets the splash size it with its own CSS.
+import brandSvg from '../../../resources/brand.svg?raw'
 
 const api = window.kokona
 const mountEl = document.getElementById('app')
@@ -109,7 +113,16 @@ function renderBoot(): void {
   retry.addEventListener('click', () => void api.restartCore())
   const detailsToggle = el('button', 'action', '详情')
   actions.append(retry, detailsToggle)
-  center.append(logo, name, spinner(), phaseText, noticeBox, errorBox, actions)
+
+  // The same lockup the preload injects into the sidebar, inlined here rather than loaded as an
+  // image: it carries an embedded raster and is meant to be a real element the splash can size
+  // on its own. YG's order is the image, then this mark, then the blessing, then the boot flow,
+  // then the 详情 button - so the blessing is a flex item now instead of an absolute overlay.
+  const brand = el('div', 'splash__brand')
+  brand.innerHTML = brandSvg
+  const blessing = el('div', 'splash__blessing', '沐浴晨光，方得救赎！')
+
+  center.append(logo, brand, name, blessing, spinner(), phaseText, noticeBox, errorBox, actions)
 
   const details = el('div', 'card splash__details')
   details.hidden = true
@@ -117,9 +130,7 @@ function renderBoot(): void {
   const logs = el('pre', 'logs', '')
   details.append(kv, el('h2', undefined, '内核日志'), logs)
 
-  const blessing = el('div', 'splash__blessing', '沐浴晨光，方得救赎！')
-
-  main.append(center, details, blessing)
+  main.append(center, details)
   root.append(main)
 
   const refreshLogs = async (): Promise<void> => {

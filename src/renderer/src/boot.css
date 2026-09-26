@@ -305,21 +305,13 @@ main.splash {
   flex-direction: column;
   align-items: center;
   gap: 18px;
-  /* Anchor for .splash__blessing: it sits below the centred block without
-     joining the flex flow, so the logo/spinner stay optically centred. */
-  position: relative;
 }
 
+/* YG's splash order: the app image, then the brand mark, then this line, then the boot flow,
+   then the 详情 button. So the blessing is a normal flex item now — it used to be an absolute
+   overlay pinned at 60%/72% to dodge the centred block, and that workaround is exactly what
+   made its spacing awkward. In the flow, the stack's own gap does the spacing. */
 .splash__blessing {
-  position: absolute;
-  left: 50%;
-  /* 72%, not 60%. The centred block above (logo, spinner, 正在启动, 详情) is vertically
-     centred with margin:auto, so its lower edge lands around 64% of the window — at 60% this
-     line was sitting level with the 详情 button rather than under it, which is what read as
-     too cramped. Dropping it to 72% buys the room above, and the window still leaves more
-     space below it than above. */
-  top: 72%;
-  transform: translateX(-50%);
   color: var(--muted);
   font-size: 18px;
   /* Was 0.3em, which spaced the six characters out into something that read as a
@@ -330,6 +322,14 @@ main.splash {
   white-space: nowrap;
   pointer-events: none;
   user-select: none;
+}
+
+/* The lockup is authored at 583x192 with a raster baked in, so its intrinsic size is far too
+   large for the splash. Pin the height and let the width follow the viewBox. */
+.splash__brand svg {
+  display: block;
+  height: 44px;
+  width: auto;
 }
 
 .splash__center {
