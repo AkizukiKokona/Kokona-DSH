@@ -313,10 +313,15 @@ main.splash {
 .splash__blessing {
   position: absolute;
   left: 50%;
-  top: 60%;
+  /* 72%, not 60%. The centred block above (logo, spinner, 正在启动, 详情) is vertically
+     centred with margin:auto, so its lower edge lands around 64% of the window — at 60% this
+     line was sitting level with the 详情 button rather than under it, which is what read as
+     too cramped. Dropping it to 72% buys the room above, and the window still leaves more
+     space below it than above. */
+  top: 72%;
   transform: translateX(-50%);
   color: var(--muted);
-  font-size: 13px;
+  font-size: 18px;
   /* Was 0.3em, which spaced the six characters out into something that read as a
      gap in the middle of the line. Set tight; the indent matches it so the optical
      centre stays put. */
