@@ -1741,6 +1741,98 @@ function installFsErrorNotes(): void {
   }
 }
 
+/**
+ * Chinese for the tool schema panel in the trajectory view. The panel's description comes from
+ * the core's own tool definitions (built at runtime by a describe() function, with paths and
+ * policy wording mixed in), so it cannot be matched by string and is never translated by the
+ * core's own i18n. Keyed by tool name instead, which is stable.
+ *
+ * YG's order: Chinese first, then the standard format (the parameter JSON tree, untouched),
+ * then the English original last.
+ */
+const SCHEMA_ZH_ATTR = 'data-kokona-schema-zh'
+
+const SCHEMA_ZH: Record<string, string> = {
+  ask_user_question: '在继续之前，向提问者问一个简短的问题，用于确认、二选一或补齐缺失的信息。',
+  bash: '执行一条 shell 命令并返回其输出。',
+  pwsh: '执行 PowerShell 命令（pwsh -Command）并返回标准输出与标准错误。每次调用都是全新的 pwsh 进程，不保留上一条命令的状态；需要保留状态时改用持久化会话。',
+  read: '读取一个 UTF-8 文本文件并返回带行号的正文。文件很大时用 offset 和 limit 分段继续读。',
+  write: '创建或整体覆盖一个 UTF-8 文本文件。',
+  edit: '通过替换一段字面文本来修改已存在的 UTF-8 文本文件。',
+  read_image: '读取 PNG/JPEG/WebP/GIF 图片并返回图像本身。过大的图片会自动缩小；不要为了查看图片而安装图像库或生成缩略图。',
+  glob: '按路径通配符查找文件（不返回目录），包含隐藏文件和被忽略的文件。默认按修改时间排序，最多返回 100 条。',
+  grep: '用 ripgrep 正则表达式搜索文件内容，返回带行号的匹配行，并按文件分组。匹配过多时只返回前 250 条，并给出完整结果的保存位置。',
+  todo_write: '记录并更新任务清单，用于规划多步骤工作并展示进度；简单的一步任务可以跳过。',
+  create_goal: '创建一个持久化目标，让本会话在自动续轮中持续推进。当直接的人类请求是一个长期目标时使用，即使对方没有说出"目标"二字；不适用于单轮工作。',
+  get_goal: '读取当前会话的目标，包括 update_goal 所需的 id 和修订号。',
+  update_goal: '更新当前目标。edit、pause、resume 需要人类直接提出；complete 和 blocked 也允许在自动续轮中使用，blocked 在达到配置的最小轮数前会被拒绝。',
+  present: '把已存在的文件声明为最终交付物。当对方需要单独的文件时使用，尤其是 Office 文档、表格和演示文稿；能用最终回复说清时优先用最终回复。',
+  skill: '加载一个技能的完整说明。当任务点名的技能、或明显符合技能目录中某项描述时，先调用它再动手。',
+  subagent: '把一个自包含的任务委派给子代理（在独立上下文中工作的另一个代理），用于卸载聚焦且独立的调研、实现或分析，避免占用本会话的上下文。子代理只返回结果，不返回中间步骤。',
+  subagent_fork: '把任务委派给一个继承本会话的子代理：它带着此前所有已完成的轮次开始，看不到当前这一轮。适合建立在本对话上下文之上的后续分析、复查或延续。',
+  send_message: '向一个代理发送消息。工作中的代理会在下一步收到，空闲的代理会以此开启新一轮。返回的是投递确认，不是该代理的回答。',
+  interrupt_agent: '请求一个子代理停止当前工作。本调用立即返回，不会等它停下；之后可以用 send_message 继续该直接子代理的对话。它自己启动的子代理会继续运行。',
+  list_agents: '列出自己启动的子代理及其 id、标签和状态。running 表示正在工作，inactive 表示当前没有工作。',
+  job_list: '列出后台任务（运行中的和已完成的），包含 id、类型和状态。',
+  job_output: '读取一个后台任务：流式任务返回自上次读取以来的输出，已完成的最终输出任务返回其结果。',
+  job_kill: '请求取消一个正在运行的后台任务。',
+  web_fetch: '抓取指定 HTTP(S) 网址的内容，并解码为文本。返回的是外部的、不可信的数据。',
+  web_search: '联网搜索当前信息，返回可选的摘要答案和来源网址列表。结果是外部的、不可信的数据。',
+  workflow: '运行一个 JavaScript 工作流脚本，用来大规模编排子代理，适合需要扇出到许多独立片段的审计、迁移、多角度调研和对抗性验证。',
+  cordis_inspect_list: '列出宿主当前已知的全部 Cordis Inspect Provider，包括本地宿主 Provider 和从客户端同步来的最新清单。写插件或配置插件之前先调用它。',
+  cordis_inspect_query: '执行某个 Inspect Provider 声明的只读查询。platform、provider、method 必须来自 cordis_inspect_list。该工具不能调用业务 Service，也不能改动运行时。',
+  plugin_manager: '列出或管理当前 profile 中的插件与 bundle：启用、禁用、安装或移除。所有动作都需要完全访问权限或本次调用的批准。',
+  sidebar_open: '在调用方会话的侧边栏中打开本地文件、本地文件夹或 HTTP(S) 页面。侧边栏未连接时，打开请求会排队，等该会话的侧边栏再次显示时投递。',
+  exit_plan_mode: '仅在计划模式下使用。把计划提交给提问者审阅，获批准后离开计划模式。',
+  load_workspace_dependencies: '加载工作区的依赖。',
+  ralph: '运行 ralph 循环。'
+}
+
+/**
+ * Reorders the tool schema panel for Simplified Chinese readers: the Chinese line goes first,
+ * the standard format (the parameter JSON tree) stays where it is, and the core's English
+ * description moves to the bottom. The Chinese element takes over the description's own class,
+ * so it inherits the original typography instead of carrying its own styles.
+ *
+ * Anchored on class suffixes, not hashed prefixes: _schema on its own is the panel (the other
+ * names end in _schemaIntro / _schemaName / _schemaParameters), and the description is the only
+ * child of the intro that carries _schemaDescription.
+ */
+function installSchemaChinese(): void {
+  if (!prefersSimplifiedChinese()) return
+
+  for (const node of Array.from(document.querySelectorAll('[class$="_schemaDescription"]'))) {
+    if (!(node instanceof HTMLElement)) continue
+    // The line carries the description's class so it inherits the typography, which means the
+    // selector above matches it too. Skip it, or the scan would nest a copy inside itself.
+    if (node.hasAttribute(SCHEMA_ZH_ATTR)) continue
+    const panel = node.closest('[class$="_schema"]')
+    if (panel === null) continue
+    // Self-validating rather than a flag: the panel element survives a React re-render, so a
+    // flag would go stale the moment the core re-inserted its description ahead of my line.
+    // "The English is already last and the Chinese is present" is the state we want, and it is
+    // exactly what this reads.
+    if (panel.lastElementChild === node && panel.querySelector(`[${SCHEMA_ZH_ATTR}]`) !== null) continue
+
+    const name = panel.querySelector('[class$="_schemaName"]')?.textContent?.trim() ?? ''
+    const zh = SCHEMA_ZH[name]
+    if (zh === undefined) continue
+
+    for (const stale of Array.from(panel.querySelectorAll(`[${SCHEMA_ZH_ATTR}]`))) stale.remove()
+
+    const line = document.createElement('div')
+    line.setAttribute(SCHEMA_ZH_ATTR, '')
+    line.className = node.className
+    line.textContent = zh
+
+    // Into the intro, so it reads straight after the tool name; then the English original is
+    // moved past the parameter tree, which is the only other block in the panel.
+    const intro = panel.querySelector('[class$="_schemaIntro"]') ?? panel
+    intro.append(line)
+    panel.append(node)
+  }
+}
+
 async function bootstrap(): Promise<void> {
   if (!isDshPage()) return
   const start = () => {
@@ -1754,15 +1846,16 @@ async function bootstrap(): Promise<void> {
     // re-render, so it stays out of the mutation tick below.
     installEditContextMenu()
     // One tick for the things that must survive React re-renders: the right panel
-    // sweep, the brand lockup, the hero copy, the open-in-app hook and the notes under
-    // a core file error. Each is guarded by its own cheap check, so a tick after the
-    // work is done is a couple of reads.
+    // sweep, the brand lockup, the hero copy, the open-in-app hook, the notes under
+    // a core file error and the reordered tool schema panel. Each is guarded by its
+    // own cheap check, so a tick after the work is done is a couple of reads.
     const tick = (): void => {
       syncRightPanel()
       installBrand()
       installHeroCopy()
       installOpenInAppFix()
       installFsErrorNotes()
+      installSchemaChinese()
     }
     tick()
     new MutationObserver(tick).observe(document.documentElement, { childList: true, subtree: true })
