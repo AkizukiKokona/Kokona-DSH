@@ -30,6 +30,10 @@ jobs:
           cache: npm
       - name: Install dependencies
         run: npm ci
+      - name: Vendor the bundled runtime
+        # A fresh clone has none of this, and without it the installer builds fine and cannot
+        # start on a machine that has nothing installed. That is exactly what 1.1.0 shipped.
+        run: npm run prepare:baseline
       - name: Build
         run: npm run build
       - name: Package
