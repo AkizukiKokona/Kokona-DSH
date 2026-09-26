@@ -19,7 +19,7 @@ const PAGE = `<!doctype html>
 :root{
   --kokona-surface-glass: rgba(255,255,255,.72);
   --kokona-surface-float: rgba(255,255,255,.85);
-  --kokona-surface-menu: rgba(255,255,255,.72);
+  --kokona-surface-menu: rgba(255,255,255,.98);
   --kokona-surface-selected: rgba(0,0,0,.08);
   --we-blur: 16px; --we-saturate: 1.8;
   --dsw-alias-bg-base: #ffffff;
@@ -146,9 +146,9 @@ async function main() {
   lines.push(`   compaction bg    : ${a.compactionBg}   (must be transparent)`)
   lines.push(`   compaction blur  : ${a.compactionBackdrop}`)
   lines.push(`   banner bg / blur : ${a.bannerBg} / ${a.bannerBackdrop}`)
-  lines.push(`   hover card bg    : ${a.hoverCardBg}   (must be rgba(255, 255, 255, 0.72) - the glass alpha, same as the add menu)`)
+  lines.push(`   hover card bg    : ${a.hoverCardBg}   (must be rgba(255, 255, 255, 0.98) - same as the add menu)`)
   lines.push(`   hover preview bg : ${a.hoverPreviewBg}   (same)`)
-  lines.push(`   cmd menu bg      : ${a.cmdMenuBg}   (must be rgba(255, 255, 255, 0.72) - it had no background at all)`)
+  lines.push(`   cmd menu bg      : ${a.cmdMenuBg}   (must be rgba(255, 255, 255, 0.98) - it had no background at all)`)
   lines.push(`   cmd menu blur    : ${a.cmdMenuBlur}`)
   lines.push(`   schema order     : ${a.schemaOrder}`)
   lines.push(`                      (must be schemaIntro > schemaParameters > schemaDescription)`)
