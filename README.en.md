@@ -7,13 +7,13 @@
   <a href="https://github.com/AkizukiKokona/KokonaHarness/releases/latest"><img alt="GitHub release" src="https://img.shields.io/github/v/release/AkizukiKokona/KokonaHarness?label=release&sort=semver&color=4d6bfe"></a>
   <a href="https://github.com/AkizukiKokona/KokonaHarness/tags"><img alt="GitHub tag" src="https://img.shields.io/github/v/tag/AkizukiKokona/KokonaHarness?label=tag&sort=semver"></a>
   <a href="https://github.com/AkizukiKokona/KokonaHarness/releases"><img alt="GitHub downloads" src="https://img.shields.io/github/downloads/AkizukiKokona/KokonaHarness/total?label=downloads"></a>
+  <a href="https://github.com/AkizukiKokona/KokonaHarness/stargazers"><img alt="GitHub stars" src="https://img.shields.io/github/stars/AkizukiKokona/KokonaHarness?label=stars&color=e3b341"></a>
 </p>
 
 <p align="center">
-  <b>Codeberg</b> ·
+  <b>Codeberg</b> (mirror) ·
   <a href="https://codeberg.org/AkizukiKokona/KokonaHarness/releases"><img alt="Codeberg release" src="https://img.shields.io/codeberg/v/release/AkizukiKokona/KokonaHarness?label=release&color=2185d0"></a>
   <a href="https://codeberg.org/AkizukiKokona/KokonaHarness/releases"><img alt="Codeberg tag" src="https://img.shields.io/codeberg/v/tag/AkizukiKokona/KokonaHarness?label=tag"></a>
-  <a href="https://codeberg.org/AkizukiKokona/KokonaHarness"><img alt="Codeberg stars" src="https://codeberg.org/AkizukiKokona/KokonaHarness/badges/stars.svg"></a>
 </p>
 
 <p align="center">
@@ -24,13 +24,6 @@
 # KokonaHarness
 
 [简体中文](README.md) | English
-
-> **Renamed to KokonaHarness in 1.0.2.** The repositories moved to
-> [GitHub](https://github.com/AkizukiKokona/KokonaHarness) and
-> [Codeberg](https://codeberg.org/AkizukiKokona/KokonaHarness), and the shell's built-in updater now
-> points at them. The old repositories and their releases are abandoned, with no migration. The data
-> directory is still `%APPDATA%\KokonaDSH` — deliberately pinned (`app.setPath('userData', ...)`), so
-> upgrading does not re-download a core you already have.
 
 A DeepSeek Harness (`dsh`) desktop shell. Electron + a web-rendered core, with two things the
 existing half-finished desktops don't give you:

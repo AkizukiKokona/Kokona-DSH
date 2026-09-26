@@ -7,13 +7,13 @@
   <a href="https://github.com/AkizukiKokona/KokonaHarness/releases/latest"><img alt="GitHub 最新发行版" src="https://img.shields.io/github/v/release/AkizukiKokona/KokonaHarness?label=release&sort=semver&color=4d6bfe"></a>
   <a href="https://github.com/AkizukiKokona/KokonaHarness/tags"><img alt="GitHub tag" src="https://img.shields.io/github/v/tag/AkizukiKokona/KokonaHarness?label=tag&sort=semver"></a>
   <a href="https://github.com/AkizukiKokona/KokonaHarness/releases"><img alt="GitHub 下载量" src="https://img.shields.io/github/downloads/AkizukiKokona/KokonaHarness/total?label=downloads"></a>
+  <a href="https://github.com/AkizukiKokona/KokonaHarness/stargazers"><img alt="GitHub star" src="https://img.shields.io/github/stars/AkizukiKokona/KokonaHarness?label=stars&color=e3b341"></a>
 </p>
 
 <p align="center">
-  <b>Codeberg</b> ·
+  <b>Codeberg</b>（镜像）·
   <a href="https://codeberg.org/AkizukiKokona/KokonaHarness/releases"><img alt="Codeberg 最新发行版" src="https://img.shields.io/codeberg/v/release/AkizukiKokona/KokonaHarness?label=release&color=2185d0"></a>
   <a href="https://codeberg.org/AkizukiKokona/KokonaHarness/releases"><img alt="Codeberg tag" src="https://img.shields.io/codeberg/v/tag/AkizukiKokona/KokonaHarness?label=tag"></a>
-  <a href="https://codeberg.org/AkizukiKokona/KokonaHarness"><img alt="Codeberg star" src="https://codeberg.org/AkizukiKokona/KokonaHarness/badges/stars.svg"></a>
 </p>
 
 <p align="center">
@@ -24,8 +24,6 @@
 # KokonaHarness
 
 [English](README.en.md) | 简体中文
-
-> **1.0.2 起更名为 KokonaHarness。** 仓库迁到 [GitHub](https://github.com/AkizukiKokona/KokonaHarness) 与 [Codeberg](https://codeberg.org/AkizukiKokona/KokonaHarness)，外壳内置的自动更新已指向新仓库；旧仓库和旧发行版不再维护，也不做迁移。数据目录仍叫 `%APPDATA%\KokonaDSH` —— 刻意保留原名（`app.setPath('userData', ...)` 钉住了），免得升级时把已经下好的内核重下一遍。
 
 一个 DeepSeek Harness（`dsh`）桌面外壳。Electron + 网页渲染的内核，补上现有那些半成品桌面端缺的两件事：
 
