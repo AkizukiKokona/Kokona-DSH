@@ -1,4 +1,19 @@
+<p align="center">
+  <img src="resources/brand.svg" alt="KokonaHarness" width="420">
+</p>
+
+<p align="center">
+  <a href="https://github.com/AkizukiKokona/KokonaHarness/releases/latest"><img alt="release" src="https://img.shields.io/github/v/release/AkizukiKokona/KokonaHarness?label=release&sort=semver&color=4d6bfe"></a>
+  <a href="https://github.com/AkizukiKokona/KokonaHarness/tags"><img alt="tag" src="https://img.shields.io/github/v/tag/AkizukiKokona/KokonaHarness?label=tag&sort=semver"></a>
+  <a href="https://github.com/AkizukiKokona/KokonaHarness/releases"><img alt="downloads" src="https://img.shields.io/github/downloads/AkizukiKokona/KokonaHarness/total?label=downloads"></a>
+  <img alt="platform" src="https://img.shields.io/badge/platform-Windows%20%7C%20macOS%20%7C%20Linux-0078d4">
+  <img alt="license" src="https://img.shields.io/badge/license-MIT-green">
+  <a href="https://codeberg.org/AkizukiKokona/KokonaHarness"><img alt="Codeberg" src="https://codeberg.org/AkizukiKokona/KokonaHarness/badges/release.svg"></a>
+</p>
+
 # KokonaHarness
+
+[简体中文](README.md) | English
 
 > **Renamed to KokonaHarness in 1.0.2.** The repositories moved to
 > [GitHub](https://github.com/AkizukiKokona/KokonaHarness) and

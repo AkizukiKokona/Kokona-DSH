@@ -1,3 +1,16 @@
+<p align="center">
+  <img src="resources/brand.svg" alt="KokonaHarness" width="420">
+</p>
+
+<p align="center">
+  <a href="https://github.com/AkizukiKokona/KokonaHarness/releases/latest"><img alt="最新发行版" src="https://img.shields.io/github/v/release/AkizukiKokona/KokonaHarness?label=release&sort=semver&color=4d6bfe"></a>
+  <a href="https://github.com/AkizukiKokona/KokonaHarness/tags"><img alt="tag" src="https://img.shields.io/github/v/tag/AkizukiKokona/KokonaHarness?label=tag&sort=semver"></a>
+  <a href="https://github.com/AkizukiKokona/KokonaHarness/releases"><img alt="下载量" src="https://img.shields.io/github/downloads/AkizukiKokona/KokonaHarness/total?label=downloads"></a>
+  <img alt="平台" src="https://img.shields.io/badge/platform-Windows%20%7C%20macOS%20%7C%20Linux-0078d4">
+  <img alt="许可" src="https://img.shields.io/badge/license-MIT-green">
+  <a href="https://codeberg.org/AkizukiKokona/KokonaHarness"><img alt="Codeberg" src="https://codeberg.org/AkizukiKokona/KokonaHarness/badges/release.svg"></a>
+</p>
+
 # KokonaHarness
 
 [English](README.en.md) | 简体中文
