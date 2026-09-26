@@ -49,6 +49,12 @@ echo.
 call npm run pack
 if errorlevel 1 goto :fail
 
+rem The build runs scripts/local-version.mjs first, which may bump the patch once after
+rem a release. Re-read package.json so the comparison below uses the version that was
+rem actually packed, not the one from before the build.
+for /f "usebackq delims=" %%v in (`powershell -NoProfile -Command "(ConvertFrom-Json (Get-Content 'package.json' -Raw)).version"`) do set "SRCVER=%%v"
+if defined SRCVER echo [.] Source version after the build: !SRCVER!
+
 rem Read back what was actually stamped into the build, so "did it update?" is
 rem answered right here rather than by the update prompt on the next launch.
 set "PACKED="

@@ -1,6 +1,6 @@
 {
   "name": "kokonaharness",
-  "version": "1.0.3",
+  "version": "1.0.4",
   "description": "KokonaHarness - a DeepSeek Harness desktop shell with an independently updatable core and a custom dark titlebar.",
   "main": "./out/main/index.js",
   "author": "YG",
@@ -8,6 +8,8 @@
   "private": true,
   "scripts": {
     "dev": "electron-vite dev",
+    "predev": "node scripts/local-version.mjs",
+    "prebuild": "node scripts/local-version.mjs",
     "build": "electron-vite build",
     "start": "electron-vite preview",
     "typecheck": "tsc --noEmit -p tsconfig.node.json && tsc --noEmit -p tsconfig.preload.json && tsc --noEmit -p tsconfig.web.json",

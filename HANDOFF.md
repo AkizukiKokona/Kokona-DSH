@@ -1023,6 +1023,39 @@ Get-CimInstance Win32_Process -Filter "Name='node.exe'" |
 **排除项**：预加载脚本**不是**原因 —— 启动屏是 `file://`，`isDshPage()` 返回 false，
 `bootstrap()` 早退，注入逻辑在启动屏上根本不跑。
 
+## 24. 本地版本号规则（`scripts/local-version.mjs`）
+
+**目的**：代码往前走了、版本号还停在上一个已发布的号上 —— §21 那个「应用提示更新、提示的其实
+是它自己」就是这么来的。这个脚本让**本地**副本永远比最后一个 release 高一个 patch。
+
+**规则**（挂在 npm 的 `prebuild` / `predev` 上，所以 `npm run build` / `npm run pack` / `npm run dev`
+都会先过一遍）：
+
+1. 取最新的 `v*` tag 当作「已发布版本」；
+2. 本地版本**等于**它，**并且**树确实动过（tag 之后有提交，或有已跟踪文件被改）→ **patch +1**；
+3. 本地版本已经**高于**它 → 什么都不做。这就是「一次上云后只加一次」：加完就永远大于它，
+   直到下一个 tag 出现；
+4. 本地版本**低于**它 → 不动，留给人处理；
+5. 树没动过（刚 clone，或正好停在 tag 上）→ 不动。
+
+**必须是本地功能 —— CI 里绝不能跑。** 发布产物报的版本必须和它的 tag 一致，否则发布自相矛盾。
+GitHub Actions 会设 `CI=true`，脚本第一步就退出。
+
+**写法上的两个刻意选择**：
+- 改版本号用**定点字符串替换**，不重新 `JSON.stringify` —— 否则整个 `package.json` 被重排，
+  一行的改动淹没在噪音里。
+- 「树动过没有」只看**已跟踪文件**（`git status --porcelain --untracked-files=no`）——
+  仓库里本来就有故意不跟踪的草稿文件（`KokonaHARNESS.svg`、`name.png`、`tools/`），
+  它们不能被当成「有改动」。
+
+**验证记录**（v1.0.3 已发布、tag 之后有 2 个提交时）：第一次跑 `1.0.3 -> 1.0.4`；
+第二次跑 `1.0.4 is already ahead` 不动；`CI=true` 直接跳过；`npm run build` 走 `prebuild`
+且不重复加。
+
+**和 `repack.cmd` 的配合**：`prebuild` 可能加号，所以 `repack.cmd` 在 `npm run pack` **之后**
+重新读一次 `package.json` 再和打出来的 `ProductVersion` 比对，否则会误报「版本不一致」。
+
+
 
 
 
