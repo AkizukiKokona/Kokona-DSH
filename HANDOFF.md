@@ -853,4 +853,39 @@ HTTP 路由，所以本次没有覆盖它。核心那个 `/select,` 两参数的
 `/(^|\/)open-in-app\/open$/`、合成 `Response`）、`kokona:reveal-path`、`revealPath()` 辅助函数全部在位。
 **未做**：没有启动应用看实际观感（会杀掉正在跑的内核）。
 
+### 发布记录（2026-09-26）
+
+| 项 | 值 |
+|---|---|
+| commit | `c94b06c` fix(1.0.3): stop the sidebar width oscillation, reveal files from File Explorer |
+| tag | `v1.0.3` → `c94b06c`，已推 github + codeberg |
+| Actions run | `36211633357`，三平台全绿 |
+| GitHub release | 4 个资产：exe `95307592`、mac-arm64 `112155431`、mac-x64 `117191819`、linux AppImage `117506976` 字节 |
+| Codeberg release | id `12462360`，4 个资产与 GitHub **逐个字节相等** |
+| 资产名 | `KokonaHarness-Setup-1.0.3.exe` / `KokonaHarness-1.0.3-mac-arm64.dmg` / `-mac-x64.dmg` / `-linux-x86_64.AppImage` |
+| 更新检查 | 两个端点实测都返回 `v1.0.3`：`api.github.com/…/releases/latest` 与 `codeberg.org/api/v1/repos/…/releases?limit=1`（应用读 `[0]`） |
+
+**Codeberg 配额（新踩的坑，重要）**：Codeberg 的发行附件是**用户级硬配额**，不是限速。
+v1.0.0/1.0.1/1.0.2 各约 421 MB，加上 v1.0.3 的前三个资产累计 1.56 GB 之后，第 4 个（95 MB 的 exe）
+被直接拒掉：
+
+```
+{"message":"quota exceeded","user_id":1307129,"username":"AkizukiKokona"}
+```
+
+**重试立刻再拒**（等了一会儿也一样），所以是配额不是限速。按 YG 的决定，删掉 **v1.0.0 和 v1.0.1 的附件**
+（`DELETE /releases/{id}/assets/{asset_id}` —— 只删附件，**发行说明和 tag 都保留**，GitHub 上原件也都在），
+释放 843 MB → 剩 752 MB，1.0.3 的 exe 随即传完。
+
+**下次发版前先算空间**：一版约 442 MB，配额上限落在 1.5–1.6 GB 之间，所以 Codeberg 上大约只能同时放
+**三版**的附件。再发之前要先删最旧那版的附件，否则会卡在最后一个资产上（而且前三个已经传上去了，
+留下一个残缺的发行版）。注意更新检查器只读 `tag_name` 然后链到发行页，**不挑资产** ——
+所以缺 exe 的发行版对 Windows 用户就是「点进去下不到东西」。
+
+**上传配方（已验证，沿用 §18）**：PS 7.6 的
+`Invoke-RestMethod -Method Post -Form @{attachment = Get-Item $path}`，
+打到 `$base/releases/{id}/assets`，`Authorization: token <40 位>` 走 `-Headers`。
+exe 95 MB 约 31s，其余每个 19–20s。脚本按名字跳过已存在的资产，所以中断后重跑是安全的。
+
+
 
