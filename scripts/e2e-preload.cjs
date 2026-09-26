@@ -43,6 +43,7 @@ body{margin:0;font:14px system-ui}
   </div>
   <p id="err">Error: cannot modify "D:\\kokonadsh\\src\\shared\\constants.ts": file has not been read — read the file, then retry</p>
   <textarea id="field" rows="3"></textarea>
+  <div class="X_card" id="hovercard"><div class="X_preview"><span data-diff-note="metadata">meta</span><span data-diff-hunk-header>@@ -1 +1 @@</span><span>changed line</span></div></div>
 </div>
 </body></html>`
 
@@ -108,7 +109,9 @@ async function main() {
       compactionBg: cs.backgroundColor,
       compactionBackdrop: cs.backdropFilter || cs.webkitBackdropFilter,
       bannerBg: banner ? getComputedStyle(banner).backgroundColor : null,
-      bannerBackdrop: banner ? (getComputedStyle(banner).backdropFilter || '-') : null
+      bannerBackdrop: banner ? (getComputedStyle(banner).backdropFilter || '-') : null,
+      hoverCardBg: (() => { const c = document.getElementById('hovercard'); return c ? getComputedStyle(c).backgroundColor : null; })(),
+      hoverPreviewBg: (() => { const p = document.querySelector('#hovercard .X_preview'); return p ? getComputedStyle(p).backgroundColor : null; })()
     }
   })()`)
   lines.push('A. 报错下方注释 + 压缩行底色')
@@ -119,6 +122,8 @@ async function main() {
   lines.push(`   compaction bg    : ${a.compactionBg}   (must be transparent)`)
   lines.push(`   compaction blur  : ${a.compactionBackdrop}`)
   lines.push(`   banner bg / blur : ${a.bannerBg} / ${a.bannerBackdrop}`)
+  lines.push(`   hover card bg    : ${a.hoverCardBg}   (must be rgba(255, 255, 255, 0.85))`)
+  lines.push(`   hover preview bg : ${a.hoverPreviewBg}   (same)`)
 
   // B: right-click a textarea.
   const b = await win.webContents.executeJavaScript(`(async () => {

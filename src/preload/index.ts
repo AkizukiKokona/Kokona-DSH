@@ -163,8 +163,8 @@ function ensureShellStyle(theme?: 'dark' | 'light'): void {
 .${MENU_CLASS} button { text-align: left; border: 0; background: transparent; color: var(--dsw-alias-label-primary, #e8e8ee); font: inherit; font-size: 13px; line-height: 18px; padding: 8px 10px; border-radius: 8px; cursor: pointer; -webkit-app-region: no-drag; }
 .${MENU_CLASS} button:hover { background: var(--dsw-alias-interactive-bg-hover, rgba(255,255,255,0.08)); }
 .${MENU_CLASS} button.kokona-danger { color: var(--dsw-alias-state-warning-primary, #f0a020); }
-html:not([data-theme="dark"]):not(:has(body[data-ds-dark-theme])) { --kokona-surface-soft: rgba(245, 246, 247, 0.72); --kokona-surface-glass: rgba(255, 255, 255, 0.72); --kokona-surface-chip: rgba(250, 250, 250, 0.72); --kokona-surface-selected: rgba(255, 255, 255, 0.95); --kokona-selected-ring: rgba(0, 0, 0, 0.35); }
-html[data-theme="dark"], body[data-ds-dark-theme] { --kokona-surface-soft: rgba(255, 255, 255, 0.07); --kokona-surface-glass: rgba(255, 255, 255, 0.07); --kokona-surface-chip: rgba(255, 255, 255, 0.07); --kokona-surface-selected: rgba(255, 255, 255, 0.16); --kokona-selected-ring: rgba(255, 255, 255, 0.9); }
+html:not([data-theme="dark"]):not(:has(body[data-ds-dark-theme])) { --kokona-surface-soft: rgba(245, 246, 247, 0.72); --kokona-surface-glass: rgba(255, 255, 255, 0.72); --kokona-surface-chip: rgba(250, 250, 250, 0.72); --kokona-surface-selected: rgba(255, 255, 255, 0.95); --kokona-surface-float: rgba(255, 255, 255, 0.85); --kokona-selected-ring: rgba(0, 0, 0, 0.35); }
+html[data-theme="dark"], body[data-ds-dark-theme] { --kokona-surface-soft: rgba(255, 255, 255, 0.07); --kokona-surface-glass: rgba(255, 255, 255, 0.07); --kokona-surface-chip: rgba(255, 255, 255, 0.07); --kokona-surface-selected: rgba(255, 255, 255, 0.16); --kokona-surface-float: rgba(58, 58, 60, 0.85); --kokona-selected-ring: rgba(255, 255, 255, 0.9); }
 html [class*="_panel"]:has([class*="_navList"]) [class*="_rowCard"],
 html [class*="_panel"]:has([class*="_navList"]) [class*="_cards"] > [class*="_card"] { background-color: var(--kokona-surface-glass) !important; }
 html [class*="_panel"]:has([class*="_navList"]) [class*="_selector"],
@@ -191,6 +191,16 @@ html [class*="_panel"]:has([class*="_navList"]) [class*="_themeCube"][aria-press
    Paint the card with the same glass as the 产物 rows and let the header show it
    through instead of adding a second layer. */
 [data-changed-files] { background-color: var(--kokona-surface-glass) !important; --changes-fill: transparent !important; --changes-hover: var(--dsw-alias-interactive-bg-hover, rgba(128, 128, 128, 0.12)) !important; }
+/* The 产物 hover preview — the card that pops off a file row showing its diff. Two solid
+   layers stack here: HoverCard.module.css paints .card with a hard-coded --dsw-hovercard-bg
+   (#2C2C2E dark, near-white light) and .preview with --dsw-alias-bg-layer-1. Because the card
+   is position:fixed it renders outside [data-conversation-scroll], so neither the wallpaper
+   tint nor the transcript's bg-layer-1 remap reaches it, and it lands as a solid slab over
+   the glass. YG wants it translucent but a step whiter than the 产物 rows, so it still reads
+   as floating above them. Anchored on data-diff-note, which is authored by the core and
+   appears only inside such a preview, rather than on the hashed module class. */
+[class*="_card"]:has([data-diff-note]),
+[class*="_preview"]:has([data-diff-note]) { background-color: var(--kokona-surface-float) !important; }
 /* Every code surface — markdown code blocks, the edit/diff block, tool IO cards,
    the skill card — fills with --dsw-alias-markdown-code-block, an opaque
    near-white in the light theme. Route it to the same chip the 产物 cards use.

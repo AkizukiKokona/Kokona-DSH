@@ -1316,6 +1316,35 @@ div.card
 **探针加了三个断言**：`note after card`（必须 true）、`note INSIDE card`（必须 false）、
 `note count`（两个报错就该有两条注释）。假页面里也加了一个仿造的卡片结构。
 
+## 31. 产物栏悬停预览（HoverCard）的实心白板
+
+**现象**：产物栏里指向某个文件会弹出一个叠层显示改动 —— 那个叠层是纯白。
+
+**原因**（`dsh-client-ui-primitives/lib/HoverCard.module.css`）：
+
+```css
+.card    { --dsw-hovercard-bg: #2C2C2E; position: fixed; background: var(--dsw-hovercard-bg); }
+.preview { background: var(--dsw-alias-bg-layer-1); }
+```
+
+两层实心叠在一起。而且卡片是 `position: fixed` —— 渲染在 `[data-conversation-scroll]` **外面**，
+所以壁纸的 tint 和壳对 `bg-layer-1` 的重映射**都够不着它**，于是整块就是实心板。
+
+**修法**：新增 token `--kokona-surface-float`（浅色 `rgba(255,255,255,.85)` / 深色
+`rgba(58,58,60,.85)`）—— 比产物行的 `--kokona-surface-glass`（0.72）**更白一点**，正是 YG 要的
+「稍微半透明、但比产物更白」。然后：
+
+```css
+[class*="_card"]:has([data-diff-note]),
+[class*="_preview"]:has([data-diff-note]) { background-color: var(--kokona-surface-float) !important; }
+```
+
+**为什么用 `:has([data-diff-note])`**：`_card` 这个后缀太泛（任何卡片都叫 `_card`），单独用会误伤。
+`data-diff-note` 是核心自己写的、且只出现在这种 diff 预览里，组合起来才是精确的。没有用哈希前缀。
+
+**坑**：`.card` 里的 `--dsw-hovercard-bg` 是**局部声明**，会盖掉从 `html`/`body` 继承来的同名变量 ——
+所以**不能**靠在外面设置那个变量来改它，必须在卡片自身上写 `background-color`。
+
 
 
 
