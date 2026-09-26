@@ -234,6 +234,28 @@ html [data-agent-preset-id][class*="_cardSelectionDisabled"] { background-color:
    the transcript stays legible through the button. */
 button[class*="_toBottom"] { background-color: var(--kokona-surface-glass) !important; backdrop-filter: blur(var(--we-blur, 16px)) saturate(var(--we-saturate, 1.8)); }
 button[class*="_toBottom"]:hover { background-color: var(--kokona-surface-selected) !important; }
+/* The compaction row (「上下文已压缩」). Collapsed it is an ordinary button on the
+   transcript, but once expanded the core makes its header position:sticky and fills it
+   with --dsw-alias-bg-base — an opaque base colour the wallpaper plugin never re-tints and
+   the transcript remap above does not cover — so the header becomes a solid bar riding over
+   the glass. It only shows once it actually sticks, which is why it looked intermittent.
+   A sticky bar has to occlude the text sliding under it, so it cannot just be made
+   transparent: give it the composer's veil plus a backdrop blur, which hides what is behind
+   it while keeping the material. Its hover fill is an opaque token too. */
+[class*="_compactionRow"]:has([class*="_compactionBody"]) [class*="_compactionButton"] {
+  background-color: var(--kokona-surface-glass) !important;
+  backdrop-filter: blur(var(--we-blur, 16px)) saturate(var(--we-saturate, 1.8));
+  -webkit-backdrop-filter: blur(var(--we-blur, 16px)) saturate(var(--we-saturate, 1.8));
+}
+[class*="_compactionRow"]:has([class*="_compactionBody"]) [class*="_compactionButton"]:hover { background-color: var(--kokona-surface-selected) !important; }
+/* The code-block banner inside the expanded body is sticky as well, and sticks directly
+   under that header, so it has the same opaque fill to answer for. data-code-block-banner
+   is authored by the core rather than hashed. */
+[class*="_compactionBody"] [data-code-block-banner] {
+  background-color: var(--kokona-surface-glass) !important;
+  backdrop-filter: blur(var(--we-blur, 16px)) saturate(var(--we-saturate, 1.8));
+  -webkit-backdrop-filter: blur(var(--we-blur, 16px)) saturate(var(--we-saturate, 1.8));
+}
 /* TurnTriggerNodeView — the attribution notice above a turn that is not from a
    human (webhook, goal, subagent, schedule) — is a <section data-turn-trigger>
    filled with --dsw-alias-markdown-code-block and outlined. NOT the same element as

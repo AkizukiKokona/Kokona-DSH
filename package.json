@@ -15,6 +15,7 @@
     "typecheck": "tsc --noEmit -p tsconfig.node.json && tsc --noEmit -p tsconfig.preload.json && tsc --noEmit -p tsconfig.web.json",
     "pack": "npm run build && electron-builder --dir",
     "dist": "npm run build && electron-builder",
+    "e2e": "electron-vite build && electron scripts/e2e-preload.cjs",
     "prepare:baseline": "node scripts/prepare-baseline.mjs"
   },
   "devDependencies": {

@@ -1195,13 +1195,67 @@ accelerators by locale / platform
   不再是带标记的元素）→ 自愈，不会堆出重复。
 - 全量走文本节点有成本，所以**限流 2 秒**一次。
 
-**没验证的部分**：检测依赖「报错在页面上是一个纯文本节点」。这一点是**推断**的（错误由模板字符串拼出），
-没有真在页面上确认。如果实际渲染把文字拆开了，或者根本不显示这段文本，就得换锚点。
-
 **验证**：`npm run typecheck` / `npm run build` 通过。翻译的正则另外单独跑过（那个模块在 preload 之外
 没法 import，所以是镜像一份正则跑的）：Windows 全反斜杠路径、带 `Error: ` 前缀、`not found` 都正确捕获；
-stale 那条和无关文本正确地**不**出 note。真机确认需要**重启核心**，然后让 agent 去编辑一个重启前读过的
-文件 —— 报错下面应该是「原文 / 中文 / 提示」三行。
+stale 那条和无关文本正确地**不**出 note。
+
+**「报错是一个纯文本节点」这个推断，后来由 §28 的端到端探针证实了**（A 组：note 出现且是 2 行；
+E 组：`caretRangeFromPoint` 的 `nodeType === 3`）。
+
+## 27. 上下文压缩那一行展开后底色变实心
+
+**现象**：点开「上下文已压缩」那一行，表头有时变成**实心条**浮在玻璃上。不是每次都有 —— 取决于滚动位置。
+
+**原因**（核心自己的 CSS，`dsh-client-ui-chat/lib/client.js`）：
+
+```css
+.Sixlwa_compactionRow:has(.Sixlwa_compactionBody) .Sixlwa_compactionButton{
+  z-index:7; background:var(--dsw-alias-bg-base); position:sticky; top:0; border-radius:0
+}
+```
+
+展开后（`:has(.compactionBody)`）表头变成 `position: sticky` + `--dsw-alias-bg-base`。
+`bg-base` 是**不透明底色**，而壳只重映射了 `--dsw-alias-bg-layer-1`，没管它 —— 所以表头是实心的。
+只有真粘住时才看得见，所以像是「有概率」。
+
+**不能简单改透明**：sticky 表头必须**遮住**从下面滑过的文字，改透明会看到文字重叠。
+所以给毛玻璃 —— 和壳里 `_toBottom` 那个悬浮按钮同一套：`--kokona-surface-glass` +
+`backdrop-filter: blur(var(--we-blur)) saturate(var(--we-saturate))`，遮得住又保住了材质。
+hover 的 `--dsw-alias-interactive-bg-hover-solid` 也是不透明 token，一并重映射。
+展开体里的 `[data-code-block-banner]` 同样是 sticky、同样实心，一起处理。
+
+选择器走**类名后缀**（`[class*="_compactionRow"]` 等），不用哈希前缀；banner 用核心自己写的
+`data-code-block-banner`。
+
+**坑**：壳的 CSS 是一整个**模板字符串**，注释里**不能出现反引号** —— 第一版在注释里写了
+`` `position: sticky` ``，直接把模板字符串截断了，`npm run build` 报
+`ERROR: Expected ";" but found "position"`。
+
+## 28. `npm run e2e`：preload 功能的端到端探针
+
+`scripts/e2e-preload.cjs`。这是**唯一**能验证 preload 里那些 DOM 逻辑的手段 ——
+类型检查和构建都碰不到它们。
+
+**做法**：起一个 `127.0.0.1` 上的假页面（`isDshPage()` 要求这个主机名），用**真实的**
+`out/preload/index.js` 当 preload 装进一个隐藏窗口，然后真的派发手势。结果写到根目录
+`e2e-report.txt` —— Electron 在 Windows 上 stdout 不可靠，所以必须落文件。
+
+**覆盖**：
+
+- A. 报错下方注释：条数、译文文本、压缩表头的 `background-color` / `backdrop-filter`
+- B. 右键输入框 → 菜单出现、条目与 `enabled` 正确
+- C. 右键控件 → **不**接管
+- D. 选中正文后右键 → 菜单出现
+- E. 无选区、指针压在文字上 → 走 `caretRangeFromPoint` 命中测试（断言 `nodeType === 3`）
+- F. 点击菜单项 → 菜单关闭、动作送达主进程、**焦点仍在输入框**
+
+**两个必须记住的点**：
+
+- 探针必须给 `kokona:get-config` 一个 handler。`installTitlebar()` 挂在它上面，而
+  **`ensureShellStyle()` 在 `installTitlebar()` 里面** —— 不回答它，整块壳 CSS 根本不会注入，
+  A 组会**假失败**（第一版就是这么骗了我一次）。
+- D/E 组显示的菜单条目来自探针**写死的桩数据**，不是真实状态表 —— 状态表由 `editMenuEntries()`
+  决定，另有单独的探针覆盖。这里测的是**渲染和手势**，不是判定逻辑。
 
 
 
