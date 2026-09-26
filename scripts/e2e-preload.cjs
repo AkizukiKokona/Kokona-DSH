@@ -56,6 +56,7 @@ body{margin:0;font:14px system-ui}
       <pre class="Y0dWHa_schemaTree">{"type":"object"}</pre>
     </div>
   </div>
+  <div class="Df_add" id="diffline"><span class="Df_sign">+</span><span class="Df_number">12</span><span class="Df_text">added</span></div>
   <div class="Cm_card" id="cmdmenu">
     <input class="Cm_search">
     <div class="Cm_viewport">
@@ -139,6 +140,8 @@ async function main() {
       cmdMenuBlur: (() => { const m = document.getElementById('cmdmenu'); return m ? (getComputedStyle(m).backdropFilter || '-') : null; })(),
       addMenuBg: (() => { const m = document.getElementById('addmenu'); return m ? getComputedStyle(m).backgroundColor : null; })(),
       addMenuBlur: (() => { const m = document.getElementById('addmenu'); return m ? (getComputedStyle(m).backdropFilter || '-') : null; })(),
+      diffLineBg: (() => { const d = document.getElementById('diffline'); return d ? getComputedStyle(d).backgroundColor : null; })(),
+      diffNumberBg: (() => { const n = document.querySelector('#diffline .Df_number'); return n ? getComputedStyle(n).backgroundColor : null; })(),
       // schema panel: Chinese first, the parameter tree untouched in the middle, English last
       schemaOrder: (() => { const p = document.getElementById('schemapanel'); return p === null ? null : Array.from(p.children).map((c) => String(c.className).replace(/^Y0dWHa_/, '')).join(' > '); })(),
       schemaZh: (() => { const z = document.querySelector('#schemapanel [data-kokona-schema-zh]'); return z === null ? null : z.textContent; })(),
@@ -159,6 +162,8 @@ async function main() {
   lines.push(`   cmd menu blur    : ${a.cmdMenuBlur}`)
   lines.push(`   ADD menu bg      : ${a.addMenuBg}   (must be rgba(255, 255, 255, 0.9) - the real one, _menu + _viewport)`)
   lines.push(`   ADD menu blur    : ${a.addMenuBlur}`)
+  lines.push(`   diff added line  : ${a.diffLineBg}   (must NOT be the menu surface - _add collides with the diff row)`)
+  lines.push(`   diff +n gutter   : ${a.diffNumberBg}   (must NOT be the menu surface either)`)
   lines.push(`   schema order     : ${a.schemaOrder}`)
   lines.push(`                      (must be schemaIntro > schemaParameters > schemaDescription)`)
   lines.push(`   schema zh        : ${a.schemaZh}`)
